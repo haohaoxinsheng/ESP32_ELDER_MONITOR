@@ -1,0 +1,250 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>智慧老人居家监测系统</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark">护</div>
+        <div>
+          <h2>智慧养老</h2>
+          <p>居家监测</p>
+        </div>
+      </div>
+      <nav class="side-nav">
+        <button class="nav-item active" data-section="overview" type="button">总览大屏</button>
+        <button class="nav-item" data-section="alarms" type="button">报警中心</button>
+        <button class="nav-item" data-section="devices" type="button">设备联动</button>
+        <button class="nav-item" data-section="history" type="button">历史数据</button>
+        <button class="nav-item" data-section="cloud" type="button">云平台</button>
+      </nav>
+      <div class="side-status">
+        <span id="sideOnlineDot"></span>
+        <div>
+          <strong id="sideOnlineText">等待连接</strong>
+          <small id="sideDevice">ESP32</small>
+        </div>
+      </div>
+    </aside>
+
+    <div class="app-shell">
+      <div id="criticalBanner" class="critical-banner" hidden>
+        <strong id="criticalTitle">紧急提醒</strong>
+        <span id="criticalText">请立即处理</span>
+        <button id="ackCritical" type="button">已知晓</button>
+      </div>
+
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">ESP32 + 阿里云物联网 + 实时大屏</p>
+          <h1>非接触式老年人居家监测系统</h1>
+          <p class="subtitle">危险强提醒优先，环境与联动信息完整展示</p>
+        </div>
+        <div class="top-actions">
+          <button id="themeButton" class="ghost-button" type="button"><span>主题</span><strong>切换</strong></button>
+          <button id="demoButton" class="ghost-button" type="button"><span>数据</span><strong>演示</strong></button>
+          <div class="connection">
+            <span id="connDot" class="dot"></span>
+            <span id="connText">等待数据</span>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="alert-strip" id="alertStrip">
+          <div>
+            <strong id="alertHeadline">系统运行正常</strong>
+            <span id="alertMessage">暂无危险报警，持续监测老人活动和居家环境。</span>
+          </div>
+          <small id="updatedAt">--</small>
+        </section>
+
+        <section class="hero-grid" id="overview">
+          <article class="status-panel" id="statusPanel">
+            <span class="label">P0 安全状态</span>
+            <strong id="alarmText">正常</strong>
+            <span id="deviceText">设备未连接</span>
+            <div class="status-pills">
+              <span id="sosPill">SOS 正常</span>
+              <span id="fallPill">跌倒正常</span>
+              <span id="nightPill">未检测起夜</span>
+            </div>
+          </article>
+
+          <article class="danger-card air-card">
+            <span>空气质量 MQ135</span>
+            <strong id="mq135Hero">--</strong>
+            <small id="airHint">等待数据</small>
+          </article>
+
+          <article class="danger-card co-card">
+            <span>一氧化碳监测 MQ7</span>
+            <strong id="mq7Hero">--</strong>
+            <small id="coHint">等待数据</small>
+          </article>
+        </section>
+
+        <section class="metric-grid">
+          <article class="metric">
+            <span>温度</span>
+            <strong id="temperature">--</strong>
+            <small>摄氏度</small>
+          </article>
+          <article class="metric">
+            <span>湿度</span>
+            <strong id="humidity">--</strong>
+            <small>%RH</small>
+          </article>
+          <article class="metric">
+            <span>光照</span>
+            <strong id="lux">--</strong>
+            <small>Lux</small>
+          </article>
+          <article class="metric">
+            <span>压力</span>
+            <strong id="fsr">--</strong>
+            <small>FSR402</small>
+          </article>
+        </section>
+
+        <section class="ops-grid">
+          <article class="panel risk-panel">
+            <div class="panel-head compact">
+              <div>
+                <h2>风险评估</h2>
+                <span>按安全告警、气体、起夜和环境综合判断</span>
+              </div>
+              <strong id="riskScore">--</strong>
+            </div>
+            <div class="risk-meter" aria-hidden="true">
+              <span id="riskBar"></span>
+            </div>
+            <div class="risk-copy">
+              <strong id="riskLevel">等待数据</strong>
+              <span id="riskReason">设备连接后显示实时风险摘要。</span>
+            </div>
+          </article>
+
+          <article class="panel quick-panel">
+            <div class="panel-head compact">
+              <div>
+                <h2>运行概况</h2>
+                <span>设备在线、样本和推送状态</span>
+              </div>
+            </div>
+            <div class="quick-grid">
+              <div><span>运行时长</span><strong id="uptime">--</strong></div>
+              <div><span>历史样本</span><strong id="sampleCount">0</strong></div>
+              <div><span>手机推送</span><strong id="pushRequired">--</strong></div>
+              <div><span>危险等级</span><strong id="dangerLevel">--</strong></div>
+            </div>
+          </article>
+
+          <article class="panel cloud-panel" id="cloud">
+            <div class="panel-head compact">
+              <div>
+                <h2>云平台链路</h2>
+                <span>ESP32 到本地镜像服务的数据状态</span>
+              </div>
+              <span id="cloudStatus" class="tag muted">未连接</span>
+            </div>
+            <div class="cloud-list">
+              <div><span>ProductKey</span><strong id="cloudProduct">--</strong></div>
+              <div><span>DeviceName</span><strong id="cloudDeviceName">--</strong></div>
+              <div><span>最近上报</span><strong id="lastSeen">--</strong></div>
+            </div>
+          </article>
+        </section>
+
+        <section class="content-grid">
+          <div class="content-column data-column">
+            <article class="panel chart-panel" id="history">
+              <div class="panel-head">
+                <div>
+                  <h2>环境趋势</h2>
+                  <span>温度、湿度、光照最近 60 条</span>
+                </div>
+              </div>
+              <canvas id="trendChart" width="960" height="320"></canvas>
+            </article>
+
+            <article class="panel state-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>状态量</h2>
+                  <span>人体、振动、灯光、风扇</span>
+                </div>
+              </div>
+              <div class="state-grid">
+                <div><span>人体活动 PIR</span><strong id="pir">--</strong></div>
+                <div><span>振动 SW420</span><strong id="vibration">--</strong></div>
+                <div><span>SOS 按键</span><strong id="sos">--</strong></div>
+                <div><span>跌倒强提醒</span><strong id="fallDetected">--</strong></div>
+                <div><span>起夜检测</span><strong id="nightActivity">--</strong></div>
+                <div><span>暗环境</span><strong id="dark">--</strong></div>
+                <div><span>MQ135 原始值</span><strong id="mq135">--</strong></div>
+                <div><span>MQ7 原始值</span><strong id="mq7">--</strong></div>
+                <div><span>LED 灯</span><strong id="ledOn">--</strong></div>
+                <div><span>风扇继电器</span><strong id="fanOn">--</strong></div>
+              </div>
+            </article>
+          </div>
+
+          <div class="content-column action-column">
+            <article class="panel control-panel" id="devices">
+              <div class="panel-head">
+                <div>
+                  <h2>联动开关</h2>
+                  <span>答辩演示可交互控制</span>
+                </div>
+              </div>
+              <div class="switch-list">
+                <label class="switch-row">
+                  <span><strong>起夜自动开灯</strong><small>暗环境 + PIR 检测到人</small></span>
+                  <input type="checkbox" data-control="nightLight" checked />
+                </label>
+                <label class="switch-row">
+                  <span><strong>告警强制开灯</strong><small>SOS/异常时照明提醒</small></span>
+                  <input type="checkbox" data-control="alarmLight" checked />
+                </label>
+                <label class="switch-row">
+                  <span><strong>气体异常通风</strong><small>空气质量/CO/温湿度异常</small></span>
+                  <input type="checkbox" data-control="fanVentilation" checked />
+                </label>
+                <label class="switch-row">
+                  <span><strong>蜂鸣器告警</strong><small>安全异常时声响提醒</small></span>
+                  <input type="checkbox" data-control="buzzerAlarm" checked />
+                </label>
+                <label class="switch-row">
+                  <span><strong>SOS 舵机动作</strong><small>按键求助时转动标识</small></span>
+                  <input type="checkbox" data-control="sosServo" checked />
+                </label>
+                <label class="switch-row">
+                  <span><strong>无人活动提醒</strong><small>长时间无 PIR 活动提示</small></span>
+                  <input type="checkbox" data-control="noMotionWarning" checked />
+                </label>
+              </div>
+            </article>
+
+            <article class="panel events-panel" id="alarms">
+              <div class="panel-head">
+                <div>
+                  <h2>事件记录</h2>
+                  <span>告警、起夜、开关变化</span>
+                </div>
+                <span id="eventCount">0 条</span>
+              </div>
+              <div id="events" class="events"></div>
+            </article>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,21 @@
+(kicad_sch (version 20230121) (generator "codex")
+  (uuid 1c093014-86e5-4d00-9348-1ea01c38ab86)
+  (paper "A4")
+  (title_block
+    (title "ESP32 Elder Monitor Carrier PCB")
+    (date "2026-05-11")
+    (rev "A")
+    (company "Graduation Design")
+    (comment 1 "PCB-first connector carrier. See hardware/docs/pcb_readme.md for pin mapping.")
+  )
+  (lib_symbols)
+  (text "PCB-first connector carrier for ESP32-S3 elder monitor.\nOpen esp32_elder_monitor_pcb.kicad_pcb for the routed board.\nInterfaces: OLED, BH1750, DHT22, PIR, MQ135, MQ7, FSR402, SW420, SOS, buzzer, relay fan, LED, servo."
+    (at 25.4 25.4 0)
+    (effects (font (size 1.27 1.27)))
+    (uuid 2c91a5d9-2f68-4359-93ff-96299ce6a241)
+  )
+  (sheet_instances
+    (path "/" (page "1"))
+  )
+  (symbol_instances)
+)
