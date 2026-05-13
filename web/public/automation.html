@@ -1,0 +1,168 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>联动控制 - 智慧老人居家监测系统</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <div id="criticalBanner" class="critical-banner safe">
+        <span id="criticalIcon" class="banner-icon">✓</span>
+        <strong id="criticalTitle">系统安全</strong>
+        <span id="criticalText">暂无危险报警，设备正在持续监测。</span>
+        <button id="ackCritical" type="button">已知晓</button>
+      </div>
+
+      <header class="topbar">
+        <div class="top-title">
+          <div class="brand-inline">
+            <div class="brand-mark">联</div>
+            <div>
+              <p class="eyebrow">场景化联动控制</p>
+              <h1>设备联动分类管理</h1>
+              <p class="subtitle" id="automationSummary">等待设备数据或启动演示数据。</p>
+            </div>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button id="themeButton" class="ghost-button" type="button"><span>主题</span><strong>切换</strong></button>
+          <button id="demoButton" class="ghost-button" type="button"><span>数据</span><strong>演示</strong></button>
+          <a class="ghost-button page-link" href="./index.html"><span>⌂</span><strong>总览</strong></a>
+          <div class="connection">
+            <span id="connDot" class="dot"></span>
+            <span id="connText">等待数据</span>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="alert-strip" id="alertStrip">
+          <div>
+            <span id="alertIcon" class="alert-icon">✓</span>
+            <strong id="alertHeadline">系统运行正常</strong>
+            <span id="alertMessage">暂无危险报警，持续监测老人活动和居家环境。</span>
+          </div>
+          <small id="updatedAt">--</small>
+        </section>
+
+        <section class="automation-grid" id="automationGrid">
+          <article class="panel automation-card" data-status-key="darkLight">
+            <div class="automation-head">
+              <span class="automation-icon">☾</span>
+              <div>
+                <h2>暗环境联动</h2>
+                <span>光照低于阈值并检测到人体活动时执行</span>
+              </div>
+              <strong id="darkLightState">关闭</strong>
+            </div>
+            <div class="switch-list">
+              <label class="switch-row">
+                <span><strong>灯光自动开关</strong><small>暗环境 + PIR 活动时打开 LED 灯</small></span>
+                <input type="checkbox" data-control="nightLight" checked />
+              </label>
+              <label class="switch-row">
+                <span><strong>窗帘自动开关</strong><small>暗环境时自动关闭窗帘，白天保持待机</small></span>
+                <input type="checkbox" data-control="curtainAuto" checked />
+              </label>
+            </div>
+            <div class="automation-state">
+              <span>灯光</span><strong id="darkLightDetailState">关闭</strong>
+              <span>窗帘</span><strong id="curtainState">待机</strong>
+            </div>
+          </article>
+
+          <article class="panel automation-card" data-status-key="nightWakeLight">
+            <div class="automation-head">
+              <span class="automation-icon">床</span>
+              <div>
+                <h2>起夜监测联动</h2>
+                <span>夜间离床和回床只进入统计表，起夜时可复用人体亮灯</span>
+              </div>
+              <strong id="nightWakeLightState">关闭</strong>
+            </div>
+            <div class="switch-list">
+              <label class="switch-row">
+                <span><strong>起夜记录统计</strong><small>记录老人离床和回床时间</small></span>
+                <input type="checkbox" data-control="nightWakeMonitor" checked />
+              </label>
+              <label class="switch-row">
+                <span><strong>起夜联动开灯</strong><small>夜间离床检测到人体时打开 LED 灯</small></span>
+                <input type="checkbox" data-control="nightWakeLight" checked />
+              </label>
+            </div>
+          </article>
+
+          <article class="panel automation-card" data-status-key="alarmLight">
+            <div class="automation-head">
+              <span class="automation-icon">!</span>
+              <div>
+                <h2>危险告警联动</h2>
+                <span>SOS、跌倒或传感器异常时执行强提醒</span>
+              </div>
+              <strong id="alarmLightState">关闭</strong>
+            </div>
+            <div class="switch-list">
+              <label class="switch-row">
+                <span><strong>告警强制开灯</strong><small>异常时打开照明提醒</small></span>
+                <input type="checkbox" data-control="alarmLight" checked />
+              </label>
+              <label class="switch-row">
+                <span><strong>蜂鸣器告警</strong><small>安全异常时声响提醒</small></span>
+                <input type="checkbox" data-control="buzzerAlarm" checked />
+              </label>
+              <label class="switch-row">
+                <span><strong>SOS 舵机动作</strong><small>主动求助时转动标识</small></span>
+                <input type="checkbox" data-control="sosServo" checked />
+              </label>
+            </div>
+            <div class="automation-state">
+              <span>蜂鸣器</span><strong id="buzzerState">关闭</strong>
+              <span>SOS 舵机</span><strong id="servoState">复位</strong>
+            </div>
+          </article>
+
+          <article class="panel automation-card" data-status-key="fan">
+            <div class="automation-head">
+              <span class="automation-icon">≋</span>
+              <div>
+                <h2>气体通风联动</h2>
+                <span>烟雾、空气质量、CO 或高温异常时执行</span>
+              </div>
+              <strong id="fanState">关闭</strong>
+            </div>
+            <div class="switch-list">
+              <label class="switch-row">
+                <span><strong>气体异常通风</strong><small>MQ2/MQ135/MQ7 或温湿度异常时打开风扇</small></span>
+                <input type="checkbox" data-control="fanVentilation" checked />
+              </label>
+            </div>
+          </article>
+
+          <article class="panel automation-card" data-status-key="noMotion">
+            <div class="automation-head">
+              <span class="automation-icon">人</span>
+              <div>
+                <h2>看护提醒联动</h2>
+                <span>长时间无人活动时记录并提示</span>
+              </div>
+              <strong id="noMotionState">待机</strong>
+            </div>
+            <div class="switch-list">
+              <label class="switch-row">
+                <span><strong>无人活动提醒</strong><small>长时间无 PIR 活动时提示异常</small></span>
+                <input type="checkbox" data-control="noMotionWarning" checked />
+              </label>
+            </div>
+            <div class="automation-state">
+              <span>最近更新</span><strong id="automationUpdatedAt">--</strong>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

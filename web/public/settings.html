@@ -1,0 +1,177 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>系统设置 - 智慧老人居家监测系统</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <div id="criticalBanner" class="critical-banner safe">
+        <span id="criticalIcon" class="banner-icon">✓</span>
+        <strong id="criticalTitle">系统安全</strong>
+        <span id="criticalText">暂无危险报警，设备正在持续监测。</span>
+        <button id="ackCritical" type="button">已知晓</button>
+      </div>
+
+      <header class="topbar">
+        <div class="top-title">
+          <div class="brand-inline">
+            <div class="brand-mark">设</div>
+            <div>
+              <p class="eyebrow">传感器阈值与报警策略</p>
+              <h1>系统设置</h1>
+              <p class="subtitle">修改后立即影响告警颜色、顶部提醒和后续数据判断</p>
+            </div>
+          </div>
+        </div>
+        <div class="top-actions">
+          <button id="themeButton" class="ghost-button" type="button"><span>主题</span><strong>切换</strong></button>
+          <button id="demoButton" class="ghost-button" type="button"><span>数据</span><strong>演示</strong></button>
+          <a class="ghost-button page-link" href="./index.html"><span>⌂</span><strong>总览</strong></a>
+          <a class="ghost-button page-link" href="./automation.html"><span>联</span><strong>联动页</strong></a>
+          <div class="connection">
+            <span id="connDot" class="dot"></span>
+            <span id="connText">等待数据</span>
+          </div>
+        </div>
+      </header>
+
+      <main>
+        <section class="alert-strip" id="alertStrip">
+          <div>
+            <span id="alertIcon" class="alert-icon">✓</span>
+            <strong id="alertHeadline">系统运行正常</strong>
+            <span id="alertMessage">暂无危险报警，持续监测老人活动和居家环境。</span>
+          </div>
+          <small id="updatedAt">--</small>
+        </section>
+
+        <section class="settings-layout">
+          <article class="panel settings-panel" id="settings">
+            <div class="panel-head">
+              <div>
+                <h2>传感器阈值设置</h2>
+                <span>所有数值会保存到本地 Node 服务，并同步给已打开的网页</span>
+              </div>
+              <span id="settingsStatus" class="tag muted">未保存</span>
+            </div>
+            <form id="thresholdForm" class="sensor-settings-grid">
+              <section class="sensor-setting">
+                <div class="sensor-setting-head">
+                  <div><strong>DHT22 温湿度</strong><span>温度、湿度舒适度报警</span></div>
+                  <input type="checkbox" data-sensor="enableDht22" checked />
+                </div>
+                <div class="threshold-grid compact">
+                  <label><span>高温 ℃</span><input type="number" min="-20" max="80" step="0.1" data-threshold="tempHigh" /></label>
+                  <label><span>低温 ℃</span><input type="number" min="-20" max="80" step="0.1" data-threshold="tempLow" /></label>
+                  <label><span>高湿 %</span><input type="number" min="0" max="100" step="1" data-threshold="humidityHigh" /></label>
+                  <label><span>低湿 %</span><input type="number" min="0" max="100" step="1" data-threshold="humidityLow" /></label>
+                </div>
+              </section>
+
+              <section class="sensor-setting">
+                <div class="sensor-setting-head">
+                  <div><strong>BH1750 光照</strong><span>暗环境和起夜场景判断</span></div>
+                  <input type="checkbox" data-sensor="enableBh1750" checked />
+                </div>
+                <div class="threshold-grid compact">
+                  <label><span>暗环境 Lux</span><input type="number" min="0" max="2000" step="1" data-threshold="luxDark" /></label>
+                </div>
+              </section>
+
+              <section class="sensor-setting">
+                <div class="sensor-setting-head">
+                  <div><strong>MQ135 空气质量</strong><span>空气污染预警和危险判断</span></div>
+                  <input type="checkbox" data-sensor="enableMq135" checked />
+                </div>
+                <div class="threshold-grid compact">
+                  <label><span>预警</span><input type="number" min="0" max="4095" step="1" data-threshold="mq135Warn" /></label>
+                  <label><span>危险</span><input type="number" min="0" max="4095" step="1" data-threshold="mq135Danger" /></label>
+                </div>
+              </section>
+
+              <section class="sensor-setting">
+                <div class="sensor-setting-head">
+                  <div><strong>MQ2 烟雾/可燃气</strong><span>烟雾和可燃气体异常判断</span></div>
+                  <input type="checkbox" data-sensor="enableMq2" checked />
+                </div>
+                <div class="threshold-grid compact">
+                  <label><span>预警</span><input type="number" min="0" max="4095" step="1" data-threshold="mq2Warn" /></label>
+                  <label><span>危险</span><input type="number" min="0" max="4095" step="1" data-threshold="mq2Danger" /></label>
+                </div>
+              </section>
+
+              <section class="sensor-setting">
+                <div class="sensor-setting-head">
+                  <div><strong>MQ7 一氧化碳</strong><span>CO 偏高和高危判断</span></div>
+                  <input type="checkbox" data-sensor="enableMq7" checked />
+                </div>
+                <div class="threshold-grid compact">
+                  <label><span>预警</span><input type="number" min="0" max="4095" step="1" data-threshold="mq7Warn" /></label>
+                  <label><span>危险</span><input type="number" min="0" max="4095" step="1" data-threshold="mq7Danger" /></label>
+                </div>
+              </section>
+
+              <section class="sensor-setting">
+                <div class="sensor-setting-head">
+                  <div><strong>FSR 压力</strong><span>在床、离床和压力异常判断</span></div>
+                  <input type="checkbox" data-sensor="enableFsr" checked />
+                </div>
+                <div class="threshold-grid compact">
+                  <label><span>在床 FSR</span><input type="number" min="0" max="4095" step="1" data-threshold="bedPresenceRaw" /></label>
+                  <label><span>压力异常</span><input type="number" min="0" max="4095" step="1" data-threshold="fsrPressure" /></label>
+                </div>
+              </section>
+
+              <section class="sensor-setting">
+                <div class="sensor-setting-head">
+                  <div><strong>PIR 人体活动</strong><span>有人经过、起夜和无人活动判断</span></div>
+                  <input type="checkbox" data-sensor="enablePir" checked />
+                </div>
+              </section>
+
+              <section class="sensor-setting">
+                <div class="sensor-setting-head">
+                  <div><strong>SW420 振动</strong><span>振动和跌倒辅助判断</span></div>
+                  <input type="checkbox" data-sensor="enableSw420" checked />
+                </div>
+              </section>
+
+              <section class="sensor-setting">
+                <div class="sensor-setting-head">
+                  <div><strong>SOS 按键</strong><span>主动求助和舵机联动</span></div>
+                  <input type="checkbox" data-sensor="enableSos" checked />
+                </div>
+              </section>
+
+              <div class="settings-actions">
+                <button class="ghost-button" id="resetThresholds" type="button"><span>↺</span><strong>恢复默认</strong></button>
+                <button class="primary-button" type="submit"><span>✓</span><strong>保存阈值</strong></button>
+              </div>
+            </form>
+          </article>
+
+          <article class="panel setting-help">
+            <div class="panel-head">
+              <div>
+                <h2>当前判断逻辑</h2>
+                <span>网页和 Node 后端都会使用这些阈值判断危险等级</span>
+              </div>
+            </div>
+            <div class="cloud-list">
+              <div><span>空气/烟雾/CO</span><strong>达到预警值变黄，达到危险值触发红色提醒</strong></div>
+              <div><span>暗环境</span><strong>低于 Lux 阈值且有人活动时触发起夜联动</strong></div>
+              <div><span>在床压力</span><strong>FSR 高于在床阈值判定已上床，低于阈值判定离床</strong></div>
+              <div><span>压力异常</span><strong>超过 FSR 阈值时进入看护风险判断</strong></div>
+              <div><span>保存方式</span><strong>服务端保存到 web/data/thresholds.json</strong></div>
+            </div>
+          </article>
+        </section>
+      </main>
+    </div>
+
+    <script src="./app.js"></script>
+  </body>
+</html>

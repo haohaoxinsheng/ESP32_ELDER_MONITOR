@@ -1,0 +1,198 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
+  <title id="title">ESP32 老人监测系统两块 830 面包板布局图</title>
+  <desc id="desc">两块 830 面包板上放置 ESP32-S3、OLED、BH1750、DHT22、PIR、FSR、SW420、SOS、MQ135、MQ7、蜂鸣器、继电器、LED 和舵机的推荐布局。</desc>
+  <defs>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="8" flood-color="#111827" flood-opacity="0.16"/>
+    </filter>
+    <style>
+      .font { font-family: Arial, "Microsoft YaHei", sans-serif; }
+      .label { font-family: Arial, "Microsoft YaHei", sans-serif; font-size: 18px; fill: #111827; font-weight: 700; }
+      .small { font-family: Arial, "Microsoft YaHei", sans-serif; font-size: 14px; fill: #374151; }
+      .tiny { font-family: Arial, "Microsoft YaHei", sans-serif; font-size: 12px; fill: #4b5563; }
+      .pin { font-family: Arial, "Microsoft YaHei", sans-serif; font-size: 13px; fill: #111827; font-weight: 700; }
+    </style>
+  </defs>
+
+  <rect width="1600" height="1000" fill="#f6f7f9"/>
+  <text x="800" y="52" text-anchor="middle" class="font" font-size="31" font-weight="700" fill="#111827">两块 830 面包板推荐布局</text>
+  <text x="800" y="86" text-anchor="middle" class="font" font-size="18" fill="#4b5563">左板：ESP32 与低功耗传感器；右板：5V、大电流模块与执行器</text>
+
+  <!-- Breadboard drawing helper: left board -->
+  <g id="left-board" filter="url(#shadow)">
+    <rect x="70" y="150" width="700" height="620" rx="20" fill="#fffdf7" stroke="#d1d5db" stroke-width="3"/>
+    <text x="420" y="132" text-anchor="middle" class="label">830 面包板 A：主控 + 3.3V 传感器区</text>
+
+    <rect x="105" y="180" width="630" height="58" rx="8" fill="#f9fafb" stroke="#e5e7eb"/>
+    <rect x="105" y="682" width="630" height="58" rx="8" fill="#f9fafb" stroke="#e5e7eb"/>
+    <line x1="128" y1="198" x2="712" y2="198" stroke="#ef4444" stroke-width="7" stroke-linecap="round"/>
+    <line x1="128" y1="218" x2="712" y2="218" stroke="#2563eb" stroke-width="7" stroke-linecap="round"/>
+    <line x1="128" y1="700" x2="712" y2="700" stroke="#ef4444" stroke-width="7" stroke-linecap="round"/>
+    <line x1="128" y1="720" x2="712" y2="720" stroke="#2563eb" stroke-width="7" stroke-linecap="round"/>
+    <text x="82" y="203" text-anchor="middle" class="pin" fill="#ef4444">3V3 +</text>
+    <text x="82" y="224" text-anchor="middle" class="pin" fill="#2563eb">GND -</text>
+
+    <rect x="385" y="260" width="70" height="380" rx="10" fill="#eef2f7" stroke="#d1d5db"/>
+    <text x="420" y="455" text-anchor="middle" transform="rotate(-90 420 455)" class="tiny" font-weight="700">CENTER GAP</text>
+
+    <g fill="#1f2937" opacity="0.82">
+      <g>
+        <circle cx="135" cy="282" r="4"/><circle cx="175" cy="282" r="4"/><circle cx="215" cy="282" r="4"/><circle cx="255" cy="282" r="4"/><circle cx="295" cy="282" r="4"/><circle cx="335" cy="282" r="4"/>
+        <circle cx="135" cy="327" r="4"/><circle cx="175" cy="327" r="4"/><circle cx="215" cy="327" r="4"/><circle cx="255" cy="327" r="4"/><circle cx="295" cy="327" r="4"/><circle cx="335" cy="327" r="4"/>
+        <circle cx="135" cy="372" r="4"/><circle cx="175" cy="372" r="4"/><circle cx="215" cy="372" r="4"/><circle cx="255" cy="372" r="4"/><circle cx="295" cy="372" r="4"/><circle cx="335" cy="372" r="4"/>
+        <circle cx="135" cy="417" r="4"/><circle cx="175" cy="417" r="4"/><circle cx="215" cy="417" r="4"/><circle cx="255" cy="417" r="4"/><circle cx="295" cy="417" r="4"/><circle cx="335" cy="417" r="4"/>
+        <circle cx="135" cy="462" r="4"/><circle cx="175" cy="462" r="4"/><circle cx="215" cy="462" r="4"/><circle cx="255" cy="462" r="4"/><circle cx="295" cy="462" r="4"/><circle cx="335" cy="462" r="4"/>
+        <circle cx="135" cy="507" r="4"/><circle cx="175" cy="507" r="4"/><circle cx="215" cy="507" r="4"/><circle cx="255" cy="507" r="4"/><circle cx="295" cy="507" r="4"/><circle cx="335" cy="507" r="4"/>
+        <circle cx="135" cy="552" r="4"/><circle cx="175" cy="552" r="4"/><circle cx="215" cy="552" r="4"/><circle cx="255" cy="552" r="4"/><circle cx="295" cy="552" r="4"/><circle cx="335" cy="552" r="4"/>
+        <circle cx="135" cy="597" r="4"/><circle cx="175" cy="597" r="4"/><circle cx="215" cy="597" r="4"/><circle cx="255" cy="597" r="4"/><circle cx="295" cy="597" r="4"/><circle cx="335" cy="597" r="4"/>
+      </g>
+      <g>
+        <circle cx="505" cy="282" r="4"/><circle cx="545" cy="282" r="4"/><circle cx="585" cy="282" r="4"/><circle cx="625" cy="282" r="4"/><circle cx="665" cy="282" r="4"/><circle cx="705" cy="282" r="4"/>
+        <circle cx="505" cy="327" r="4"/><circle cx="545" cy="327" r="4"/><circle cx="585" cy="327" r="4"/><circle cx="625" cy="327" r="4"/><circle cx="665" cy="327" r="4"/><circle cx="705" cy="327" r="4"/>
+        <circle cx="505" cy="372" r="4"/><circle cx="545" cy="372" r="4"/><circle cx="585" cy="372" r="4"/><circle cx="625" cy="372" r="4"/><circle cx="665" cy="372" r="4"/><circle cx="705" cy="372" r="4"/>
+        <circle cx="505" cy="417" r="4"/><circle cx="545" cy="417" r="4"/><circle cx="585" cy="417" r="4"/><circle cx="625" cy="417" r="4"/><circle cx="665" cy="417" r="4"/><circle cx="705" cy="417" r="4"/>
+        <circle cx="505" cy="462" r="4"/><circle cx="545" cy="462" r="4"/><circle cx="585" cy="462" r="4"/><circle cx="625" cy="462" r="4"/><circle cx="665" cy="462" r="4"/><circle cx="705" cy="462" r="4"/>
+        <circle cx="505" cy="507" r="4"/><circle cx="545" cy="507" r="4"/><circle cx="585" cy="507" r="4"/><circle cx="625" cy="507" r="4"/><circle cx="665" cy="507" r="4"/><circle cx="705" cy="507" r="4"/>
+        <circle cx="505" cy="552" r="4"/><circle cx="545" cy="552" r="4"/><circle cx="585" cy="552" r="4"/><circle cx="625" cy="552" r="4"/><circle cx="665" cy="552" r="4"/><circle cx="705" cy="552" r="4"/>
+        <circle cx="505" cy="597" r="4"/><circle cx="545" cy="597" r="4"/><circle cx="585" cy="597" r="4"/><circle cx="625" cy="597" r="4"/><circle cx="665" cy="597" r="4"/><circle cx="705" cy="597" r="4"/>
+      </g>
+    </g>
+  </g>
+
+  <!-- Right board -->
+  <g id="right-board" filter="url(#shadow)">
+    <rect x="830" y="150" width="700" height="620" rx="20" fill="#fffdf7" stroke="#d1d5db" stroke-width="3"/>
+    <text x="1180" y="132" text-anchor="middle" class="label">830 面包板 B：5V 模块 + 执行器区</text>
+
+    <rect x="865" y="180" width="630" height="58" rx="8" fill="#f9fafb" stroke="#e5e7eb"/>
+    <rect x="865" y="682" width="630" height="58" rx="8" fill="#f9fafb" stroke="#e5e7eb"/>
+    <line x1="888" y1="198" x2="1472" y2="198" stroke="#ef4444" stroke-width="7" stroke-linecap="round"/>
+    <line x1="888" y1="218" x2="1472" y2="218" stroke="#2563eb" stroke-width="7" stroke-linecap="round"/>
+    <line x1="888" y1="700" x2="1472" y2="700" stroke="#ef4444" stroke-width="7" stroke-linecap="round"/>
+    <line x1="888" y1="720" x2="1472" y2="720" stroke="#2563eb" stroke-width="7" stroke-linecap="round"/>
+    <text x="1515" y="203" text-anchor="middle" class="pin" fill="#ef4444">5V +</text>
+    <text x="1515" y="224" text-anchor="middle" class="pin" fill="#2563eb">GND -</text>
+
+    <rect x="1145" y="260" width="70" height="380" rx="10" fill="#eef2f7" stroke="#d1d5db"/>
+    <text x="1180" y="455" text-anchor="middle" transform="rotate(-90 1180 455)" class="tiny" font-weight="700">CENTER GAP</text>
+  </g>
+
+  <!-- Module cards on left board -->
+  <g filter="url(#shadow)">
+    <rect x="205" y="300" width="185" height="310" rx="16" fill="#123c69" stroke="#0b253f" stroke-width="3"/>
+    <rect x="252" y="324" width="92" height="50" rx="8" fill="#d1d5db"/>
+    <text x="298" y="417" text-anchor="middle" class="font" font-size="28" font-weight="700" fill="#fff">ESP32-S3</text>
+    <text x="298" y="448" text-anchor="middle" class="font" font-size="15" fill="#cbd5e1">跨中缝插入，USB 朝外</text>
+    <text x="298" y="480" text-anchor="middle" class="font" font-size="14" fill="#dbeafe">GPIO04-16 集中出线</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="505" y="268" width="190" height="70" rx="10" fill="#eef2ff" stroke="#6366f1" stroke-width="2"/>
+    <text x="600" y="298" text-anchor="middle" class="label">OLED</text>
+    <text x="600" y="321" text-anchor="middle" class="small">SDA 8 / SCL 9</text>
+
+    <rect x="505" y="356" width="190" height="70" rx="10" fill="#ecfdf5" stroke="#10b981" stroke-width="2"/>
+    <text x="600" y="386" text-anchor="middle" class="label">BH1750</text>
+    <text x="600" y="409" text-anchor="middle" class="small">SDA 17 / SCL 18</text>
+
+    <rect x="505" y="444" width="190" height="70" rx="10" fill="#fff7ed" stroke="#f97316" stroke-width="2"/>
+    <text x="600" y="474" text-anchor="middle" class="label">DHT22</text>
+    <text x="600" y="497" text-anchor="middle" class="small">DATA GPIO7</text>
+
+    <rect x="505" y="532" width="190" height="70" rx="10" fill="#f0f9ff" stroke="#0ea5e9" stroke-width="2"/>
+    <text x="600" y="562" text-anchor="middle" class="label">PIR</text>
+    <text x="600" y="585" text-anchor="middle" class="small">OUT GPIO10</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="112" y="260" width="150" height="58" rx="10" fill="#fef2f2" stroke="#ef4444" stroke-width="2"/>
+    <text x="187" y="295" text-anchor="middle" class="label">FSR420</text>
+    <text x="187" y="315" text-anchor="middle" class="tiny">ADC GPIO6</text>
+
+    <rect x="112" y="642" width="150" height="58" rx="10" fill="#faf5ff" stroke="#a855f7" stroke-width="2"/>
+    <text x="187" y="675" text-anchor="middle" class="label">SW420</text>
+    <text x="187" y="695" text-anchor="middle" class="tiny">DO GPIO11</text>
+
+    <rect x="292" y="642" width="150" height="58" rx="10" fill="#fefce8" stroke="#eab308" stroke-width="2"/>
+    <text x="367" y="675" text-anchor="middle" class="label">SOS 按键</text>
+    <text x="367" y="695" text-anchor="middle" class="tiny">GPIO12 到 GND</text>
+  </g>
+
+  <!-- Module cards on right board -->
+  <g filter="url(#shadow)">
+    <rect x="880" y="270" width="180" height="118" rx="12" fill="#fff1f2" stroke="#e11d48" stroke-width="2"/>
+    <text x="970" y="306" text-anchor="middle" class="label">MQ135</text>
+    <text x="970" y="330" text-anchor="middle" class="small">AO GPIO4</text>
+    <text x="970" y="352" text-anchor="middle" class="tiny">5V 供电，AO 确认 ≤3.3V</text>
+
+    <rect x="880" y="410" width="180" height="118" rx="12" fill="#fff7ed" stroke="#f97316" stroke-width="2"/>
+    <text x="970" y="446" text-anchor="middle" class="label">MQ7</text>
+    <text x="970" y="470" text-anchor="middle" class="small">AO GPIO5</text>
+    <text x="970" y="492" text-anchor="middle" class="tiny">5V 供电，需预热</text>
+
+    <rect x="880" y="550" width="180" height="80" rx="12" fill="#f8fafc" stroke="#64748b" stroke-width="2"/>
+    <text x="970" y="583" text-anchor="middle" class="label">外部 5V 输入</text>
+    <text x="970" y="607" text-anchor="middle" class="small">建议 5V 2A，共地</text>
+  </g>
+
+  <g filter="url(#shadow)">
+    <rect x="1270" y="270" width="190" height="72" rx="12" fill="#fdf2f8" stroke="#db2777" stroke-width="2"/>
+    <text x="1365" y="302" text-anchor="middle" class="label">有源蜂鸣器</text>
+    <text x="1365" y="325" text-anchor="middle" class="small">GPIO13</text>
+
+    <rect x="1270" y="360" width="190" height="72" rx="12" fill="#eff6ff" stroke="#2563eb" stroke-width="2"/>
+    <text x="1365" y="392" text-anchor="middle" class="label">继电器/风扇</text>
+    <text x="1365" y="415" text-anchor="middle" class="small">IN GPIO14，5V</text>
+
+    <rect x="1270" y="450" width="190" height="72" rx="12" fill="#fefce8" stroke="#ca8a04" stroke-width="2"/>
+    <text x="1365" y="482" text-anchor="middle" class="label">LED 灯模块</text>
+    <text x="1365" y="505" text-anchor="middle" class="small">GPIO15</text>
+
+    <rect x="1270" y="540" width="190" height="72" rx="12" fill="#ecfdf5" stroke="#16a34a" stroke-width="2"/>
+    <text x="1365" y="572" text-anchor="middle" class="label">SG90 舵机</text>
+    <text x="1365" y="595" text-anchor="middle" class="small">PWM GPIO16，5V</text>
+  </g>
+
+  <!-- Bus bridges -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M710 218 C790 218 810 218 890 218" stroke="#2563eb" stroke-width="7"/>
+    <path d="M710 720 C790 720 810 720 890 720" stroke="#2563eb" stroke-width="7"/>
+    <path d="M705 198 C775 198 808 185 888 198" stroke="#ef4444" stroke-width="5" stroke-dasharray="12 9"/>
+    <text x="800" y="184" text-anchor="middle" class="tiny" fill="#991b1b">不要把 5V 直接接到 ESP32 3V3 轨</text>
+  </g>
+
+  <!-- Signal grouping lines -->
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.78">
+    <path d="M390 350 C445 320 460 305 505 303" stroke="#6366f1" stroke-width="4"/>
+    <path d="M390 362 C445 365 460 390 505 391" stroke="#10b981" stroke-width="4"/>
+    <path d="M390 410 C455 438 470 478 505 479" stroke="#f97316" stroke-width="4"/>
+    <path d="M390 455 C455 500 470 564 505 567" stroke="#0ea5e9" stroke-width="4"/>
+    <path d="M205 360 C170 345 165 320 187 318" stroke="#ef4444" stroke-width="4"/>
+    <path d="M252 610 C210 632 195 650 187 642" stroke="#a855f7" stroke-width="4"/>
+    <path d="M340 610 C350 628 360 638 367 642" stroke="#eab308" stroke-width="4"/>
+    <path d="M390 380 C600 245 765 292 880 310" stroke="#e11d48" stroke-width="4"/>
+    <path d="M390 395 C620 335 750 445 880 450" stroke="#f97316" stroke-width="4"/>
+    <path d="M390 430 C760 220 1120 290 1270 306" stroke="#db2777" stroke-width="4"/>
+    <path d="M390 445 C760 310 1120 390 1270 396" stroke="#2563eb" stroke-width="4"/>
+    <path d="M390 460 C760 395 1120 485 1270 486" stroke="#ca8a04" stroke-width="4"/>
+    <path d="M390 475 C760 475 1120 575 1270 576" stroke="#16a34a" stroke-width="4"/>
+  </g>
+
+  <!-- Power notes -->
+  <g class="font">
+    <rect x="90" y="805" width="1420" height="120" rx="16" fill="#ffffff" stroke="#d1d5db" filter="url(#shadow)"/>
+    <text x="120" y="842" font-size="20" font-weight="700" fill="#111827">供电建议</text>
+    <text x="120" y="874" font-size="17" fill="#374151">1. 左板红轨只接 ESP32 的 3.3V，给 OLED、BH1750、DHT22、FSR、SW420 等低功耗模块用。</text>
+    <text x="120" y="902" font-size="17" fill="#374151">2. 右板红轨接外部 5V，给 MQ135、MQ7、继电器、风扇和 SG90 用；两块板蓝色 GND 轨必须相连。</text>
+    <text x="120" y="930" font-size="17" fill="#374151">3. 舵机和风扇电流较大，正式演示建议从外部 5V 端子直接供电，不要让大电流穿过 ESP32。</text>
+  </g>
+
+  <!-- Pin table -->
+  <g class="font">
+    <rect x="1045" y="648" width="420" height="100" rx="12" fill="#f8fafc" stroke="#cbd5e1"/>
+    <text x="1068" y="678" font-size="17" font-weight="700" fill="#111827">信号线汇总</text>
+    <text x="1068" y="704" font-size="14" fill="#374151">GPIO4 MQ135，GPIO5 MQ7，GPIO6 FSR，GPIO7 DHT22</text>
+    <text x="1068" y="727" font-size="14" fill="#374151">GPIO8/9 OLED，GPIO17/18 BH1750，GPIO10 PIR，GPIO11 SW420</text>
+    <text x="1068" y="750" font-size="14" fill="#374151">GPIO12 SOS，GPIO13 蜂鸣器，GPIO14 继电器，GPIO15 LED，GPIO16 舵机</text>
+  </g>
+</svg>

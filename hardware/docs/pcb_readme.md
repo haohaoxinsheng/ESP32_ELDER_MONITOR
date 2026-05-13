@@ -32,7 +32,7 @@
 | J4 | OLED I2C | GND, 3V3, SCL, SDA |
 | J5 | BH1750 | GND, 3V3, SCL, SDA |
 | J6 | DHT22 | GND, 3V3, DATA |
-| J7 | PIR | GND, 5V, OUT |
+| J7 | HC-SR501 人体红外 PIR | GND, 5V, OUT |
 | J8 | MQ135 | GND, 5V, AO, NC |
 | J9 | MQ7 | GND, 5V, AO, NC |
 | J10 | FSR402 | GND, 3V3, AO |
@@ -47,12 +47,13 @@
 
 | 功能 | GPIO |
 |---|---|
+| MQ2 AOUT | GPIO03 |
 | MQ135 AOUT | GPIO04 |
 | MQ7 AOUT | GPIO05 |
 | FSR402 AOUT | GPIO06 |
 | DHT22 DATA | GPIO07 |
-| OLED/BH1750 SDA | GPIO08 |
-| OLED/BH1750 SCL | GPIO09 |
+| OLED SDA | GPIO08 |
+| OLED SCL | GPIO09 |
 | PIR OUT | GPIO10 |
 | SW420 DO | GPIO11 |
 | SOS 按键 | GPIO12 |
@@ -60,6 +61,8 @@
 | 风扇继电器 | GPIO14 |
 | LED 灯光 | GPIO15 |
 | 舵机 PWM | GPIO16 |
+| BH1750 SDA | GPIO17 |
+| BH1750 SCL | GPIO18 |
 
 ## 下单前检查
 

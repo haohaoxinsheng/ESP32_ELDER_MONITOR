@@ -7,46 +7,32 @@
     <link rel="stylesheet" href="./styles.css" />
   </head>
   <body>
-    <aside class="sidebar">
-      <div class="brand">
-        <div class="brand-mark">护</div>
-        <div>
-          <h2>智慧养老</h2>
-          <p>居家监测</p>
-        </div>
-      </div>
-      <nav class="side-nav">
-        <button class="nav-item active" data-section="overview" type="button">总览大屏</button>
-        <button class="nav-item" data-section="alarms" type="button">报警中心</button>
-        <button class="nav-item" data-section="devices" type="button">设备联动</button>
-        <button class="nav-item" data-section="history" type="button">历史数据</button>
-        <button class="nav-item" data-section="cloud" type="button">云平台</button>
-      </nav>
-      <div class="side-status">
-        <span id="sideOnlineDot"></span>
-        <div>
-          <strong id="sideOnlineText">等待连接</strong>
-          <small id="sideDevice">ESP32</small>
-        </div>
-      </div>
-    </aside>
-
     <div class="app-shell">
-      <div id="criticalBanner" class="critical-banner" hidden>
-        <strong id="criticalTitle">紧急提醒</strong>
-        <span id="criticalText">请立即处理</span>
+      <div id="criticalBanner" class="critical-banner safe">
+        <span id="criticalIcon" class="banner-icon">✓</span>
+        <strong id="criticalTitle">系统安全</strong>
+        <span id="criticalText">暂无危险报警，设备正在持续监测。</span>
         <button id="ackCritical" type="button">已知晓</button>
       </div>
 
       <header class="topbar">
-        <div>
-          <p class="eyebrow">ESP32 + 阿里云物联网 + 实时大屏</p>
-          <h1>非接触式老年人居家监测系统</h1>
-          <p class="subtitle">危险强提醒优先，环境与联动信息完整展示</p>
+        <div class="top-title">
+          <div class="brand-inline">
+            <div class="brand-mark">护</div>
+            <div>
+              <p class="eyebrow">ESP32 + 阿里云物联网 + 实时大屏</p>
+              <h1>非接触式老年人居家监测系统</h1>
+              <p class="subtitle">危险强提醒优先，环境与联动信息完整展示</p>
+            </div>
+          </div>
         </div>
         <div class="top-actions">
           <button id="themeButton" class="ghost-button" type="button"><span>主题</span><strong>切换</strong></button>
           <button id="demoButton" class="ghost-button" type="button"><span>数据</span><strong>演示</strong></button>
+          <button class="ghost-button nav-item active" data-section="overview" type="button"><span>⌂</span><strong>总览</strong></button>
+          <button class="ghost-button nav-item" data-section="alarms" type="button"><span>!</span><strong>事件</strong></button>
+          <a class="ghost-button page-link" href="./automation.html"><span>联</span><strong>联动页</strong></a>
+          <a class="ghost-button page-link" href="./settings.html"><span>⚙</span><strong>设置页</strong></a>
           <div class="connection">
             <span id="connDot" class="dot"></span>
             <span id="connText">等待数据</span>
@@ -57,6 +43,7 @@
       <main>
         <section class="alert-strip" id="alertStrip">
           <div>
+            <span id="alertIcon" class="alert-icon">✓</span>
             <strong id="alertHeadline">系统运行正常</strong>
             <span id="alertMessage">暂无危险报警，持续监测老人活动和居家环境。</span>
           </div>
@@ -76,13 +63,19 @@
           </article>
 
           <article class="danger-card air-card">
-            <span>空气质量 MQ135</span>
+            <span class="sensor-icon">≋ 空气质量 MQ135</span>
             <strong id="mq135Hero">--</strong>
             <small id="airHint">等待数据</small>
           </article>
 
+          <article class="danger-card smoke-card">
+            <span class="sensor-icon">♨ 烟雾/可燃气 MQ2</span>
+            <strong id="mq2Hero">--</strong>
+            <small id="smokeHint">等待数据</small>
+          </article>
+
           <article class="danger-card co-card">
-            <span>一氧化碳监测 MQ7</span>
+            <span class="sensor-icon">CO 一氧化碳监测 MQ7</span>
             <strong id="mq7Hero">--</strong>
             <small id="coHint">等待数据</small>
           </article>
@@ -185,11 +178,41 @@
                 <div><span>SOS 按键</span><strong id="sos">--</strong></div>
                 <div><span>跌倒强提醒</span><strong id="fallDetected">--</strong></div>
                 <div><span>起夜检测</span><strong id="nightActivity">--</strong></div>
+                <div><span>在床状态</span><strong id="bedOccupied">--</strong></div>
+                <div><span>起夜离床</span><strong id="nightWakeActive">--</strong></div>
                 <div><span>暗环境</span><strong id="dark">--</strong></div>
+                <div><span>MQ2 原始值</span><strong id="mq2">--</strong></div>
                 <div><span>MQ135 原始值</span><strong id="mq135">--</strong></div>
                 <div><span>MQ7 原始值</span><strong id="mq7">--</strong></div>
                 <div><span>LED 灯</span><strong id="ledOn">--</strong></div>
                 <div><span>风扇继电器</span><strong id="fanOn">--</strong></div>
+                <div><span>蜂鸣器</span><strong id="buzzerOn">--</strong></div>
+                <div><span>SOS 舵机</span><strong id="servoOn">--</strong></div>
+                <div><span>窗帘联动</span><strong id="curtainOn">--</strong></div>
+              </div>
+            </article>
+
+            <article class="panel night-table-panel">
+              <div class="panel-head">
+                <div>
+                  <h2>起夜回床统计</h2>
+                  <span>只记录离床、回床和持续时间，不作为强告警</span>
+                </div>
+              </div>
+              <div class="table-wrap">
+                <table class="night-table">
+                  <thead>
+                    <tr>
+                      <th>离床时间</th>
+                      <th>回床时间</th>
+                      <th>持续时长</th>
+                      <th>灯光</th>
+                    </tr>
+                  </thead>
+                  <tbody id="nightRecords">
+                    <tr><td colspan="4">暂无起夜记录</td></tr>
+                  </tbody>
+                </table>
               </div>
             </article>
           </div>
@@ -206,6 +229,18 @@
                 <label class="switch-row">
                   <span><strong>起夜自动开灯</strong><small>暗环境 + PIR 检测到人</small></span>
                   <input type="checkbox" data-control="nightLight" checked />
+                </label>
+                <label class="switch-row">
+                  <span><strong>起夜记录统计</strong><small>记录夜间离床和回床时间</small></span>
+                  <input type="checkbox" data-control="nightWakeMonitor" checked />
+                </label>
+                <label class="switch-row">
+                  <span><strong>起夜联动开灯</strong><small>夜间离床检测到人体时开灯</small></span>
+                  <input type="checkbox" data-control="nightWakeLight" checked />
+                </label>
+                <label class="switch-row">
+                  <span><strong>暗环境自动窗帘</strong><small>暗环境时自动关闭窗帘</small></span>
+                  <input type="checkbox" data-control="curtainAuto" checked />
                 </label>
                 <label class="switch-row">
                   <span><strong>告警强制开灯</strong><small>SOS/异常时照明提醒</small></span>

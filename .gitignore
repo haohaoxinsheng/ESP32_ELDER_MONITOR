@@ -5,3 +5,4 @@
 .vscode/ipch/
 web/node_modules/
 web/.env
+.deploy/

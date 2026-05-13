@@ -3,7 +3,8 @@
 #include <Arduino.h>
 
 namespace Bh1750Config {
-constexpr uint8_t SDA_PIN = 8;
-constexpr uint8_t SCL_PIN = 9;
+constexpr uint8_t SDA_PIN = 17;
+constexpr uint8_t SCL_PIN = 18;
+constexpr uint8_t I2C_ADDR = 0x23;
 constexpr float NIGHT_ACTIVITY_LUX = 80.0F;
 }  // namespace Bh1750Config

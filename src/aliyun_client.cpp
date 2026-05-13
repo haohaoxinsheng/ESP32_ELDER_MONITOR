@@ -14,8 +14,10 @@ WiFiClientSecure secureClient;
 PubSubClient mqttClient(secureClient);
 
 uint32_t lastMqttReconnectMs = 0;
+uint32_t lastControlPullMs = 0;
 uint32_t messageId = 1;
 bool wifiStarted = false;
+DeviceControlState deviceControl;
 
 String hexEncode(const uint8_t* data, size_t length) {
   static const char* hex = "0123456789abcdef";
@@ -89,6 +91,7 @@ String buildAlinkPayload(const TelemetryPayload& payload) {
   addFinite(params, "Temperature", payload.temperatureC);
   addFinite(params, "Humidity", payload.humidity);
   addFinite(params, "LightLux", payload.lux);
+  params["SmokeRaw"] = payload.mq2Raw;
   params["AirQualityRaw"] = payload.mq135Raw;
   params["CoRaw"] = payload.mq7Raw;
   params["PressureRaw"] = payload.fsrRaw;
@@ -97,6 +100,8 @@ String buildAlinkPayload(const TelemetryPayload& payload) {
   params["Sos"] = payload.sos ? 1 : 0;
   params["FallDetected"] = payload.fallDetected ? 1 : 0;
   params["Dark"] = payload.dark ? 1 : 0;
+  params["BedOccupied"] = payload.bedOccupied ? 1 : 0;
+  params["NightWakeActive"] = payload.nightWakeActive ? 1 : 0;
   params["NightActivity"] = payload.nightActivity ? 1 : 0;
   params["Alarm"] = payload.alarmAny ? 1 : 0;
   params["PushRequired"] = payload.pushRequired ? 1 : 0;
@@ -117,6 +122,7 @@ String buildMirrorPayload(const TelemetryPayload& payload) {
   doc["temperatureC"] = isnan(payload.temperatureC) ? 0 : payload.temperatureC;
   doc["humidity"] = isnan(payload.humidity) ? 0 : payload.humidity;
   doc["lux"] = isnan(payload.lux) ? 0 : payload.lux;
+  doc["mq2Raw"] = payload.mq2Raw;
   doc["mq135Raw"] = payload.mq135Raw;
   doc["mq7Raw"] = payload.mq7Raw;
   doc["fsrRaw"] = payload.fsrRaw;
@@ -125,6 +131,8 @@ String buildMirrorPayload(const TelemetryPayload& payload) {
   doc["sos"] = payload.sos;
   doc["fallDetected"] = payload.fallDetected;
   doc["dark"] = payload.dark;
+  doc["bedOccupied"] = payload.bedOccupied;
+  doc["nightWakeActive"] = payload.nightWakeActive;
   doc["nightActivity"] = payload.nightActivity;
   doc["alarmAny"] = payload.alarmAny;
   doc["pushRequired"] = payload.pushRequired;
@@ -205,6 +213,29 @@ void postMirror(const String& payload) {
   Serial.println(code);
   http.end();
 }
+
+void applyControlJson(const JsonDocument& doc) {
+  deviceControl.enableDht22 = doc["enableDht22"] | deviceControl.enableDht22;
+  deviceControl.enableBh1750 = doc["enableBh1750"] | deviceControl.enableBh1750;
+  deviceControl.enableMq135 = doc["enableMq135"] | deviceControl.enableMq135;
+  deviceControl.enableMq2 = doc["enableMq2"] | deviceControl.enableMq2;
+  deviceControl.enableMq7 = doc["enableMq7"] | deviceControl.enableMq7;
+  deviceControl.enableFsr = doc["enableFsr"] | deviceControl.enableFsr;
+  deviceControl.enablePir = doc["enablePir"] | deviceControl.enablePir;
+  deviceControl.enableSw420 = doc["enableSw420"] | deviceControl.enableSw420;
+  deviceControl.enableSos = doc["enableSos"] | deviceControl.enableSos;
+  deviceControl.nightLight = doc["nightLight"] | deviceControl.nightLight;
+  deviceControl.nightWakeMonitor = doc["nightWakeMonitor"] | deviceControl.nightWakeMonitor;
+  deviceControl.nightWakeLight = doc["nightWakeLight"] | deviceControl.nightWakeLight;
+  deviceControl.curtainAuto = doc["curtainAuto"] | deviceControl.curtainAuto;
+  deviceControl.alarmLight = doc["alarmLight"] | deviceControl.alarmLight;
+  deviceControl.fanVentilation = doc["fanVentilation"] | deviceControl.fanVentilation;
+  deviceControl.buzzerAlarm = doc["buzzerAlarm"] | deviceControl.buzzerAlarm;
+  deviceControl.sosServo = doc["sosServo"] | deviceControl.sosServo;
+  deviceControl.noMotionWarning = doc["noMotionWarning"] | deviceControl.noMotionWarning;
+  deviceControl.updatedAtMs = millis();
+  deviceControl.valid = true;
+}
 }  // namespace
 
 namespace AliyunClient {
@@ -231,6 +262,7 @@ void loop() {
 
   reconnectMqtt();
   mqttClient.loop();
+  pullControlState();
 }
 
 bool publishTelemetry(const TelemetryPayload& payload) {
@@ -250,6 +282,45 @@ bool publishTelemetry(const TelemetryPayload& payload) {
   Serial.print(F("Aliyun publish="));
   Serial.println(ok ? F("OK") : F("FAIL"));
   return ok;
+}
+
+bool pullControlState() {
+  if (!CloudConfig::ENABLE_WEB_MIRROR || WiFi.status() != WL_CONNECTED) {
+    return false;
+  }
+
+  const uint32_t now = millis();
+  if (now - lastControlPullMs < CloudConfig::WEB_CONTROL_PULL_INTERVAL_MS) {
+    return false;
+  }
+  lastControlPullMs = now;
+
+  HTTPClient http;
+  http.begin(CloudConfig::WEB_CONTROL_URL);
+  const int code = http.GET();
+  if (code != HTTP_CODE_OK) {
+    Serial.print(F("Control pull HTTP="));
+    Serial.println(code);
+    http.end();
+    return false;
+  }
+
+  JsonDocument doc;
+  const DeserializationError error = deserializeJson(doc, http.getStream());
+  http.end();
+  if (error) {
+    Serial.print(F("Control JSON error="));
+    Serial.println(error.c_str());
+    return false;
+  }
+
+  applyControlJson(doc);
+  Serial.println(F("Control state updated."));
+  return true;
+}
+
+const DeviceControlState& controlState() {
+  return deviceControl;
 }
 
 bool isWifiConnected() {
