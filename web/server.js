@@ -7,7 +7,7 @@ loadEnvFile(path.join(__dirname, '.env'));
 
 const port = Number(process.env.PORT || 3000);
 const expectedToken = process.env.DEVICE_TOKEN || 'change-me';
-const enableMock = String(process.env.ENABLE_MOCK || 'false').toLowerCase() === 'true';
+const initialMockEnabled = String(process.env.ENABLE_MOCK || 'false').toLowerCase() === 'true';
 
 let latestTelemetry = null;
 const history = [];
@@ -19,6 +19,9 @@ const maxNightRecords = 60;
 const sseClients = new Set();
 const dataDir = path.join(__dirname, 'data');
 const thresholdsFile = path.join(dataDir, 'thresholds.json');
+const mockFile = path.join(dataDir, 'mock.json');
+let mockEnabled = loadMockState();
+let mockTimer = null;
 const controlState = {
   nightLight: true,
   nightWakeMonitor: true,
@@ -139,6 +142,21 @@ function loadThresholds() {
   } catch (error) {
     return { ...defaultThresholds };
   }
+}
+
+function loadMockState() {
+  try {
+    if (!fs.existsSync(mockFile)) return initialMockEnabled;
+    const saved = JSON.parse(fs.readFileSync(mockFile, 'utf8'));
+    return Boolean(saved.enabled);
+  } catch (error) {
+    return initialMockEnabled;
+  }
+}
+
+function saveMockState() {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(mockFile, JSON.stringify({ enabled: mockEnabled }, null, 2));
 }
 
 function saveThresholds(input) {
@@ -377,6 +395,7 @@ function handleSse(req, res) {
   res.write(`event: nightRecords\ndata: ${JSON.stringify(nightRecords)}\n\n`);
   res.write(`event: controls\ndata: ${JSON.stringify(controlState)}\n\n`);
   res.write(`event: thresholds\ndata: ${JSON.stringify(thresholdState)}\n\n`);
+  res.write(`event: mock\ndata: ${JSON.stringify({ enabled: mockEnabled })}\n\n`);
   req.on('close', () => sseClients.delete(res));
 }
 
@@ -396,6 +415,65 @@ function updateControls(input) {
   while (events.length > maxEvents) events.pop();
   broadcast('events', events);
   return controlState;
+}
+
+function buildMockPayload() {
+  const t = Date.now() / 1000;
+  const nightActivity = Math.floor(t / 20) % 4 === 1;
+  const sos = Math.floor(t / 45) % 6 === 2;
+  const fallDetected = Math.floor(t / 55) % 7 === 3;
+  const coDanger = Math.floor(t / 70) % 8 === 4;
+  const smokeDanger = Math.floor(t / 50) % 7 === 3;
+  const alarmAny = sos || fallDetected || coDanger || smokeDanger;
+  const bedOccupied = Math.floor(t / 20) % 4 !== 1;
+  return normalizeTelemetry({
+    deviceName: 'demo-esp32',
+    productKey: 'demo',
+    temperatureC: 25 + Math.sin(t / 9) * 2,
+    humidity: 58 + Math.cos(t / 12) * 8,
+    lux: nightActivity ? 28 : 260 + Math.sin(t / 7) * 80,
+    mq135Raw: 1200 + Math.round(Math.sin(t / 10) * 120),
+    mq2Raw: smokeDanger ? 2600 : 1000 + Math.round(Math.sin(t / 11) * 130),
+    mq7Raw: coDanger ? 2600 : 900 + Math.round(Math.cos(t / 8) * 100),
+    fsrRaw: bedOccupied ? 1700 : 320,
+    pirMotion: nightActivity,
+    vibration: false,
+    sos,
+    fallDetected,
+    dark: nightActivity,
+    bedOccupied,
+    nightWakeActive: nightActivity && !bedOccupied,
+    nightActivity,
+    alarmAny,
+    pushRequired: alarmAny,
+    fanOn: coDanger || smokeDanger,
+    ledOn: nightActivity || alarmAny,
+    dangerLevel: coDanger ? 'co_critical' : fallDetected || sos ? 'critical' : smokeDanger ? 'danger' : nightActivity ? 'activity' : 'normal',
+    alarmText: coDanger ? 'CO DANGER' : fallDetected ? 'FALL DETECTED' : sos ? 'SOS BUTTON' : smokeDanger ? 'SMOKE DANGER' : nightActivity ? 'NIGHT MOVE' : 'NORMAL',
+    uptimeMs: Math.round(t * 1000)
+  });
+}
+
+function tickMock() {
+  rememberTelemetry(buildMockPayload());
+}
+
+function setMockEnabled(enabled, options = {}) {
+  mockEnabled = Boolean(enabled);
+  if (mockEnabled && !mockTimer) {
+    tickMock();
+    mockTimer = setInterval(tickMock, 2500);
+  }
+  if (!mockEnabled && mockTimer) {
+    clearInterval(mockTimer);
+    mockTimer = null;
+  }
+  saveMockState();
+  broadcast('mock', { enabled: mockEnabled });
+  if (options.addEvent !== false) {
+    addEvent('status', mockEnabled ? 'DEMO ENABLED' : 'DEMO DISABLED', mockEnabled ? '网页端模拟演示数据已开启' : '网页端模拟演示数据已关闭');
+  }
+  return { enabled: mockEnabled };
 }
 
 function readRequestBody(req) {
@@ -444,7 +522,7 @@ const server = http.createServer(async (req, res) => {
 
   try {
     if (req.method === 'GET' && url.pathname === '/api/health') {
-      sendJson(res, 200, { ok: true, latest: latestTelemetry, historyCount: history.length, controls: controlState, linkage: effectiveLinkage() });
+      sendJson(res, 200, { ok: true, latest: latestTelemetry, historyCount: history.length, controls: controlState, linkage: effectiveLinkage(), mock: { enabled: mockEnabled } });
       return;
     }
 
@@ -483,6 +561,11 @@ const server = http.createServer(async (req, res) => {
       return;
     }
 
+    if (req.method === 'GET' && url.pathname === '/api/mock') {
+      sendJson(res, 200, { enabled: mockEnabled });
+      return;
+    }
+
     if (req.method === 'GET' && url.pathname === '/api/stream') {
       handleSse(req, res);
       return;
@@ -497,6 +580,13 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'POST' && url.pathname === '/api/thresholds') {
       const body = await readRequestBody(req);
       sendJson(res, 200, saveThresholds(JSON.parse(body || '{}')));
+      return;
+    }
+
+    if (req.method === 'POST' && url.pathname === '/api/mock') {
+      const body = await readRequestBody(req);
+      const input = JSON.parse(body || '{}');
+      sendJson(res, 200, setMockEnabled(input.enabled));
       return;
     }
 
@@ -525,44 +615,8 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-if (enableMock) {
-  setInterval(() => {
-    const t = Date.now() / 1000;
-    const nightActivity = Math.floor(t / 20) % 4 === 1;
-    const sos = Math.floor(t / 45) % 6 === 2;
-    const fallDetected = Math.floor(t / 55) % 7 === 3;
-    const coDanger = Math.floor(t / 70) % 8 === 4;
-    const smokeDanger = Math.floor(t / 50) % 7 === 3;
-    const alarmAny = sos || fallDetected || coDanger || smokeDanger;
-    const bedOccupied = Math.floor(t / 20) % 4 !== 1;
-    const payload = normalizeTelemetry({
-      deviceName: 'demo-esp32',
-      productKey: 'demo',
-      temperatureC: 25 + Math.sin(t / 9) * 2,
-      humidity: 58 + Math.cos(t / 12) * 8,
-      lux: nightActivity ? 28 : 260 + Math.sin(t / 7) * 80,
-      mq135Raw: 1200 + Math.round(Math.sin(t / 10) * 120),
-      mq2Raw: smokeDanger ? 2600 : 1000 + Math.round(Math.sin(t / 11) * 130),
-      mq7Raw: coDanger ? 2600 : 900 + Math.round(Math.cos(t / 8) * 100),
-      fsrRaw: bedOccupied ? 1700 : 320,
-      pirMotion: nightActivity,
-      vibration: false,
-      sos,
-      fallDetected,
-      dark: nightActivity,
-      bedOccupied,
-      nightWakeActive: nightActivity && !bedOccupied,
-      nightActivity,
-      alarmAny,
-      pushRequired: alarmAny,
-      fanOn: coDanger || smokeDanger,
-      ledOn: nightActivity || alarmAny,
-      dangerLevel: coDanger ? 'co_critical' : fallDetected || sos ? 'critical' : smokeDanger ? 'danger' : nightActivity ? 'activity' : 'normal',
-      alarmText: coDanger ? 'CO DANGER' : fallDetected ? 'FALL DETECTED' : sos ? 'SOS BUTTON' : smokeDanger ? 'SMOKE DANGER' : nightActivity ? 'NIGHT MOVE' : 'NORMAL',
-      uptimeMs: Math.round(t * 1000)
-    });
-    rememberTelemetry(payload);
-  }, 2500);
+if (mockEnabled) {
+  setMockEnabled(true, { addEvent: false });
 }
 
 server.listen(port, '0.0.0.0', () => {

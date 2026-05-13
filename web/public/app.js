@@ -38,6 +38,9 @@ const state = {
     bedPresenceRaw: 1200,
     fsrPressure: 2300
   },
+  mock: {
+    enabled: false
+  },
   demoTimer: null,
   criticalMuteUntil: 0,
   criticalMutedType: ''
@@ -559,8 +562,19 @@ function renderControls() {
   document.querySelectorAll('[data-control]').forEach((input) => {
     input.checked = Boolean(state.controls[input.dataset.control]);
   });
+  renderDemoButton();
   renderLatest(state.latest);
   renderAutomationPage(state.latest);
+}
+
+function renderDemoButton() {
+  const button = $('demoButton');
+  if (!button) return;
+  const enabled = location.protocol === 'file:' ? Boolean(state.demoTimer) : Boolean(state.mock.enabled);
+  const label = button.querySelector('strong');
+  if (label) label.textContent = enabled ? '关闭' : '演示';
+  button.classList.toggle('active', enabled);
+  button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
 }
 
 function renderThresholds() {
@@ -718,6 +732,21 @@ function handleControls(controls) {
   renderControls();
 }
 
+function handleMock(mock) {
+  state.mock = { enabled: Boolean(mock?.enabled) };
+  renderDemoButton();
+  if (!state.mock.enabled && !state.latest) setConnection(false, '等待数据');
+}
+
+async function toggleServerDemo() {
+  const response = await fetch('/api/mock', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ enabled: !state.mock.enabled })
+  });
+  handleMock(await response.json());
+}
+
 function renderAutomationPage(data) {
   if (!$('automationGrid')) return;
   const status = linkageStatus(data);
@@ -762,6 +791,7 @@ function connectStream() {
   stream.addEventListener('nightRecords', (event) => handleNightRecords(JSON.parse(event.data)));
   stream.addEventListener('controls', (event) => handleControls(JSON.parse(event.data)));
   stream.addEventListener('thresholds', (event) => handleThresholds(JSON.parse(event.data)));
+  stream.addEventListener('mock', (event) => handleMock(JSON.parse(event.data)));
   stream.addEventListener('error', () => setConnection(false, '连接中断'));
 }
 
@@ -845,6 +875,31 @@ function startDemo() {
   setConnection(true, '本地演示');
   tickDemo();
   state.demoTimer = setInterval(tickDemo, 2500);
+  renderDemoButton();
+}
+
+function stopLocalDemo() {
+  if (!state.demoTimer) return;
+  clearInterval(state.demoTimer);
+  state.demoTimer = null;
+  setConnection(Boolean(state.latest), state.latest ? '实时在线' : '等待数据');
+  renderDemoButton();
+}
+
+function toggleLocalDemo() {
+  if (state.demoTimer) {
+    stopLocalDemo();
+    return;
+  }
+  startDemo();
+}
+
+async function handleDemoButtonClick() {
+  if (location.protocol === 'file:') {
+    toggleLocalDemo();
+    return;
+  }
+  await toggleServerDemo();
 }
 
 function bindControls() {
@@ -869,15 +924,7 @@ function bindControls() {
   }
 
   if ($('demoButton')) {
-    $('demoButton').addEventListener('click', () => {
-      if (state.demoTimer) {
-        clearInterval(state.demoTimer);
-        state.demoTimer = null;
-        setConnection(Boolean(state.latest), state.latest ? '实时在线' : '等待数据');
-      } else {
-        startDemo();
-      }
-    });
+    $('demoButton').addEventListener('click', handleDemoButtonClick);
   }
 
   if ($('themeButton')) {

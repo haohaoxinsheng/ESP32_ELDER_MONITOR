@@ -202,6 +202,11 @@ h2 {
   text-decoration: none;
 }
 
+.ghost-button.active {
+  border-color: rgba(34, 197, 94, 0.55);
+  background: rgba(34, 197, 94, 0.14);
+}
+
 .primary-button {
   border-color: transparent;
   background: linear-gradient(90deg, var(--accent), var(--accent-2));
