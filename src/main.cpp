@@ -92,6 +92,7 @@ bool lastSosReading = HIGH;
 bool stableSosState = HIGH;
 uint32_t lastSosChangeMs = 0;
 uint32_t lastCloudPublishMs = 0;
+bool nightActivitySeen = false;
 
 bool oledOk = false;
 bool bh1750Ok = false;
@@ -176,10 +177,12 @@ void updateActivityState() {
 
   if (controls.enablePir && activityState.dark && data.pirMotion) {
     lastNightActivityMs = now;
+    nightActivitySeen = true;
   }
 
   activityState.nightActivity =
-      activityState.dark && (now - lastNightActivityMs <= Timing::NIGHT_LIGHT_HOLD_MS);
+      activityState.dark && nightActivitySeen &&
+      (now - lastNightActivityMs <= Timing::NIGHT_LIGHT_HOLD_MS);
 }
 
 void updateAlarmState() {
