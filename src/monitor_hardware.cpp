@@ -1,0 +1,100 @@
+#include "monitor/monitor_hardware.h"
+
+#include <Wire.h>
+
+#include "devices/actuator_config.h"
+#include "devices/bh1750_config.h"
+#include "devices/dht22_config.h"
+#include "devices/fsr402_config.h"
+#include "devices/mq2_config.h"
+#include "devices/mq135_config.h"
+#include "devices/mq7_config.h"
+#include "devices/oled_config.h"
+#include "devices/pir_config.h"
+#include "devices/sos_button_config.h"
+#include "devices/sw420_config.h"
+#include "monitor/monitor_state.h"
+
+namespace Monitor {
+void setBuzzer(bool on) {
+  buzzerOn = on;
+  if (ActuatorConfig::BUZZER_IS_ACTIVE) {
+    const uint8_t activeLevel = ActuatorConfig::BUZZER_ACTIVE_HIGH ? HIGH : LOW;
+    const uint8_t inactiveLevel = ActuatorConfig::BUZZER_ACTIVE_HIGH ? LOW : HIGH;
+    digitalWrite(ActuatorConfig::BUZZER_PIN, on ? activeLevel : inactiveLevel);
+    return;
+  }
+
+  if (on) {
+    tone(ActuatorConfig::BUZZER_PIN, ActuatorConfig::PASSIVE_BUZZER_FREQUENCY_HZ);
+  } else {
+    noTone(ActuatorConfig::BUZZER_PIN);
+  }
+}
+
+void setLedLight(bool on) {
+  const uint8_t activeLevel = ActuatorConfig::LED_LIGHT_ACTIVE_HIGH ? HIGH : LOW;
+  const uint8_t inactiveLevel = ActuatorConfig::LED_LIGHT_ACTIVE_HIGH ? LOW : HIGH;
+  digitalWrite(ActuatorConfig::LED_LIGHT_PIN, on ? activeLevel : inactiveLevel);
+}
+
+bool buttonPressed() {
+  const bool reading = digitalRead(SosButtonConfig::PIN);
+  const uint32_t now = millis();
+
+  if (reading != lastSosReading) {
+    lastSosChangeMs = now;
+    lastSosReading = reading;
+  }
+
+  if ((now - lastSosChangeMs) > SosButtonConfig::DEBOUNCE_MS) {
+    stableSosState = reading;
+  }
+
+  return stableSosState == LOW;
+}
+
+void setupPins() {
+  pinMode(PirConfig::OUT_PIN, INPUT);
+  pinMode(Sw420Config::DOUT_PIN, INPUT);
+  pinMode(SosButtonConfig::PIN, INPUT_PULLUP);
+  pinMode(ActuatorConfig::BUZZER_PIN, OUTPUT);
+  pinMode(ActuatorConfig::FAN_RELAY_PIN, OUTPUT);
+  pinMode(ActuatorConfig::LED_LIGHT_PIN, OUTPUT);
+
+  setBuzzer(false);
+  digitalWrite(ActuatorConfig::FAN_RELAY_PIN, LOW);
+  setLedLight(false);
+
+  analogReadResolution(12);
+  analogSetPinAttenuation(Mq2Config::AOUT_PIN, ADC_11db);
+  analogSetPinAttenuation(Mq135Config::AOUT_PIN, ADC_11db);
+  analogSetPinAttenuation(Mq7Config::AOUT_PIN, ADC_11db);
+  analogSetPinAttenuation(Fsr402Config::AOUT_PIN, ADC_11db);
+}
+
+void setupDevices() {
+  Wire.begin(OledConfig::SDA_PIN, OledConfig::SCL_PIN);
+  oledOk = display.begin(SSD1306_SWITCHCAPVCC, OledConfig::I2C_ADDR);
+
+  bh1750Wire.begin(Bh1750Config::SDA_PIN, Bh1750Config::SCL_PIN);
+  bh1750Ok = lightMeter.begin(BH1750::CONTINUOUS_HIGH_RES_MODE,
+                              Bh1750Config::I2C_ADDR,
+                              &bh1750Wire);
+  dht.begin();
+
+  servo.setPeriodHertz(50);
+  servo.attach(ActuatorConfig::SERVO_PWM_PIN, 500, 2400);
+  servo.write(ActuatorConfig::SERVO_NORMAL_ANGLE);
+
+  if (oledOk) {
+    display.clearDisplay();
+    display.setTextColor(SSD1306_WHITE);
+    display.setTextSize(1);
+    display.setCursor(0, 0);
+    display.println(F("Elder Monitor"));
+    display.println(F("Booting..."));
+    display.display();
+  }
+}
+}  // namespace Monitor
