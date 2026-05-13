@@ -30,6 +30,7 @@ const state = {
     mq2Danger: 2400,
     mq7Warn: 1900,
     mq7Danger: 2100,
+    earthquakeWarn: 2600,
     tempHigh: 32,
     tempLow: 10,
     humidityHigh: 80,
@@ -54,6 +55,7 @@ function alarmLabel(text) {
     'CO DANGER': '一氧化碳高危',
     'FALL DETECTED': '疑似跌倒',
     'SOS BUTTON': '主动求助',
+    EARTHQUAKE: '地震报警',
     'SMOKE DANGER': '烟雾/可燃气严重异常',
     'AIR DANGER': '空气严重异常',
     'SMOKE WARNING': '烟雾/可燃气异常',
@@ -97,6 +99,7 @@ function dangerLabel(level) {
 function criticalTypeOf(data) {
   if (!data) return '';
   if (data.dangerLevel === 'co_critical') return 'co_critical';
+  if (data.alarmText === 'EARTHQUAKE') return 'earthquake';
   if (data.fallDetected) return 'fall';
   if (data.sos) return 'sos';
   return '';
@@ -189,7 +192,7 @@ function renderLatest(data) {
   }
 
   setConnection(true);
-  const critical = Boolean(data.sos || data.fallDetected || data.dangerLevel === 'co_critical');
+  const critical = Boolean(data.sos || data.fallDetected || data.dangerLevel === 'co_critical' || data.alarmText === 'EARTHQUAKE');
   const criticalType = criticalTypeOf(data);
   const muted = critical && state.criticalMutedType === criticalType && Date.now() < state.criticalMuteUntil;
   const activeCritical = critical && !muted;
@@ -211,6 +214,7 @@ function renderLatest(data) {
   setText('mq135', data.mq135Raw ?? '--');
   setText('mq7', data.mq7Raw ?? '--');
   setText('fsr', data.fsrRaw ?? '--');
+  setText('vibrationRaw', data.vibrationRaw ?? '--');
   setText('pir', yesNo(data.pirMotion));
   setText('vibration', yesNo(data.vibration));
   setText('sos', yesNo(data.sos));
@@ -249,9 +253,10 @@ function renderAlertSummary(data, critical, muted = false) {
   }
 
   if (critical) {
-    setText('alertIcon', data.dangerLevel === 'co_critical' ? 'CO' : data.fallDetected ? '↯' : '!');
+    setText('alertIcon', data.alarmText === 'EARTHQUAKE' ? '震' : data.dangerLevel === 'co_critical' ? 'CO' : data.fallDetected ? '↯' : '!');
     setText('alertHeadline', alarmLabel(data.alarmText) || '高危报警');
-    if (data.dangerLevel === 'co_critical') setText('alertMessage', '一氧化碳超标，已启动最高优先级联动。');
+    if (data.alarmText === 'EARTHQUAKE') setText('alertMessage', '检测到强震动，疑似地震或剧烈撞击，请立即查看现场。');
+    else if (data.dangerLevel === 'co_critical') setText('alertMessage', '一氧化碳超标，已启动最高优先级联动。');
     else if (data.fallDetected) setText('alertMessage', '疑似老人跌倒，请立即查看现场。');
     else if (data.sos) setText('alertMessage', '老人主动求助，请立即处理。');
     else setText('alertMessage', '检测到高危事件，请立即确认。');
@@ -284,9 +289,10 @@ function renderTopBanner(data, critical, muted = false) {
   banner.classList.toggle('danger', critical);
   banner.classList.toggle('safe', !critical);
   if (critical) {
-    setText('criticalIcon', data.dangerLevel === 'co_critical' ? 'CO' : data.fallDetected ? '↯' : '!');
+    setText('criticalIcon', data.alarmText === 'EARTHQUAKE' ? '震' : data.dangerLevel === 'co_critical' ? 'CO' : data.fallDetected ? '↯' : '!');
     setText('criticalTitle', alarmLabel(data.alarmText) || '危险报警');
-    if (data.dangerLevel === 'co_critical') setText('criticalText', 'CO 超过危险阈值，已进入红色闪烁提醒。');
+    if (data.alarmText === 'EARTHQUAKE') setText('criticalText', '震动量超过地震报警阈值，请立即确认老人和环境安全。');
+    else if (data.dangerLevel === 'co_critical') setText('criticalText', 'CO 超过危险阈值，已进入红色闪烁提醒。');
     else if (data.fallDetected) setText('criticalText', '检测到老人可能跌倒，请立即查看现场。');
     else if (data.sos) setText('criticalText', '老人按下 SOS，请立即联系或到场处理。');
     else setText('criticalText', '传感器超过设置阈值，请查看对应监测卡片。');
@@ -299,7 +305,7 @@ function renderTopBanner(data, critical, muted = false) {
 }
 
 function renderOperationalSummary(data) {
-  const score = data.sos || data.fallDetected || data.dangerLevel === 'co_critical'
+  const score = data.sos || data.fallDetected || data.dangerLevel === 'co_critical' || data.alarmText === 'EARTHQUAKE'
     ? 96
     : data.alarmAny
       ? 68
@@ -361,7 +367,6 @@ function deriveAlarm(data) {
   const th = state.thresholds;
   const next = { ...data };
   next.pirMotion = th.enablePir && next.pirMotion;
-  next.vibration = th.enableSw420 && next.vibration;
   next.sos = th.enableSos && next.sos;
   const airDanger = th.enableMq135 && Number(next.mq135Raw) >= th.mq135Danger;
   const airWarning = th.enableMq135 && Number(next.mq135Raw) >= th.mq135Warn;
@@ -373,18 +378,23 @@ function deriveAlarm(data) {
   const tempLow = th.enableDht22 && Number(next.temperatureC) <= th.tempLow;
   const humidityLow = th.enableDht22 && Number(next.humidity) <= th.humidityLow;
   const pressure = th.enableFsr && Number(next.fsrRaw) >= th.fsrPressure;
+  const earthquake = th.enableSw420 && Number(next.vibrationRaw) >= th.earthquakeWarn;
   const warning = airWarning || smokeWarning || coWarning || tempHumid || tempLow || humidityLow || pressure;
 
   next.dark = th.enableBh1750 && Boolean(next.dark || Number(next.lux) <= th.luxDark);
   next.bedOccupied = th.enableFsr && Boolean(next.bedOccupied || Number(next.fsrRaw) >= th.bedPresenceRaw);
   next.nightWakeActive = Boolean(next.nightWakeActive || (next.dark && !next.bedOccupied && next.pirMotion));
   next.nightActivity = Boolean(next.nightActivity || (next.dark && next.pirMotion) || next.nightWakeActive);
-  next.alarmAny = Boolean(next.sos || next.fallDetected || coDanger || smokeDanger || airDanger || warning || next.vibration);
-  next.pushRequired = Boolean(next.pushRequired || next.sos || next.fallDetected || coDanger || smokeDanger || airDanger);
+  next.vibration = th.enableSw420 && Boolean(next.vibration || earthquake);
+  next.alarmAny = Boolean(next.sos || next.fallDetected || earthquake || coDanger || smokeDanger || airDanger || warning || next.vibration);
+  next.pushRequired = Boolean(next.pushRequired || next.sos || next.fallDetected || earthquake || coDanger || smokeDanger || airDanger);
   next.fanOn = Boolean(next.fanOn || coDanger || smokeDanger || airDanger || tempHumid);
   next.ledOn = Boolean(next.ledOn || next.nightActivity || next.alarmAny);
 
-  if (coDanger) {
+  if (earthquake) {
+    next.dangerLevel = 'critical';
+    next.alarmText = 'EARTHQUAKE';
+  } else if (coDanger) {
     next.dangerLevel = 'co_critical';
     next.alarmText = 'CO DANGER';
   } else if (next.fallDetected) {
@@ -572,7 +582,7 @@ function renderDemoButton() {
   if (!button) return;
   const enabled = location.protocol === 'file:' ? Boolean(state.demoTimer) : Boolean(state.mock.enabled);
   const label = button.querySelector('strong');
-  if (label) label.textContent = enabled ? '关闭' : '演示';
+  if (label) label.textContent = enabled ? '开启' : '关闭';
   button.classList.toggle('active', enabled);
   button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
 }
@@ -686,6 +696,7 @@ function resetThresholds() {
     mq2Danger: 2400,
     mq7Warn: 1900,
     mq7Danger: 2100,
+    earthquakeWarn: 2600,
     tempHigh: 32,
     tempLow: 10,
     humidityHigh: 80,
@@ -803,7 +814,8 @@ function demoPayload() {
   const fallDetected = Math.floor(t / 55) % 7 === 3;
   const coDanger = Math.floor(t / 70) % 8 === 4;
   const smokeDanger = Math.floor(t / 50) % 7 === 3;
-  const alarmAny = sos || fallDetected || coDanger || smokeDanger;
+  const earthquake = Math.floor(t / 90) % 8 === 5;
+  const alarmAny = sos || fallDetected || coDanger || smokeDanger || earthquake;
   return {
     timestamp: new Date().toISOString(),
     deviceName: 'demo-esp32',
@@ -814,9 +826,10 @@ function demoPayload() {
     mq2Raw: smokeDanger ? 2600 : 1000 + Math.round(Math.sin(t / 11) * 130),
     mq135Raw: 1200 + Math.round(Math.sin(t / 10) * 120),
     mq7Raw: coDanger ? 2600 : 900 + Math.round(Math.cos(t / 8) * 100),
+    vibrationRaw: earthquake ? 3400 : Math.max(0, 140 + Math.round(Math.sin(t / 6) * 80)),
     fsrRaw: bedOccupied ? 1700 : 320,
     pirMotion: nightActivity,
-    vibration: false,
+    vibration: earthquake,
     sos,
     fallDetected,
     dark: nightActivity,
@@ -827,8 +840,8 @@ function demoPayload() {
     pushRequired: alarmAny,
     fanOn: coDanger || smokeDanger,
     ledOn: nightActivity || alarmAny,
-    dangerLevel: coDanger ? 'co_critical' : fallDetected || sos ? 'critical' : smokeDanger ? 'danger' : nightActivity ? 'activity' : 'normal',
-    alarmText: coDanger ? 'CO DANGER' : fallDetected ? 'FALL DETECTED' : sos ? 'SOS BUTTON' : smokeDanger ? 'SMOKE DANGER' : nightActivity ? 'NIGHT MOVE' : 'NORMAL',
+    dangerLevel: earthquake ? 'critical' : coDanger ? 'co_critical' : fallDetected || sos ? 'critical' : smokeDanger ? 'danger' : nightActivity ? 'activity' : 'normal',
+    alarmText: earthquake ? 'EARTHQUAKE' : coDanger ? 'CO DANGER' : fallDetected ? 'FALL DETECTED' : sos ? 'SOS BUTTON' : smokeDanger ? 'SMOKE DANGER' : nightActivity ? 'NIGHT MOVE' : 'NORMAL',
     uptimeMs: Math.round(t * 1000)
   };
 }

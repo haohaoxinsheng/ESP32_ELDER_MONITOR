@@ -95,6 +95,7 @@ String buildAlinkPayload(const TelemetryPayload& payload) {
   params["AirQualityRaw"] = payload.mq135Raw;
   params["CoRaw"] = payload.mq7Raw;
   params["PressureRaw"] = payload.fsrRaw;
+  params["VibrationRaw"] = payload.vibrationRaw;
   params["Motion"] = payload.pirMotion ? 1 : 0;
   params["Vibration"] = payload.vibration ? 1 : 0;
   params["Sos"] = payload.sos ? 1 : 0;
@@ -126,6 +127,7 @@ String buildMirrorPayload(const TelemetryPayload& payload) {
   doc["mq135Raw"] = payload.mq135Raw;
   doc["mq7Raw"] = payload.mq7Raw;
   doc["fsrRaw"] = payload.fsrRaw;
+  doc["vibrationRaw"] = payload.vibrationRaw;
   doc["pirMotion"] = payload.pirMotion;
   doc["vibration"] = payload.vibration;
   doc["sos"] = payload.sos;

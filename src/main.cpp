@@ -40,6 +40,7 @@ struct SensorData {
   uint16_t mq135Raw = 0;
   uint16_t mq7Raw = 0;
   uint16_t fsrRaw = 0;
+  uint16_t vibrationRaw = 0;
   bool pirMotion = false;
   bool vibration = false;
   bool sos = false;
@@ -145,6 +146,7 @@ void readSensors() {
   data.fsrRaw = controls.enableFsr ? analogRead(Fsr402Config::AOUT_PIN) : 0;
   data.pirMotion = controls.enablePir && digitalRead(PirConfig::OUT_PIN) == HIGH;
   data.vibration = controls.enableSw420 && digitalRead(Sw420Config::DOUT_PIN) == HIGH;
+  data.vibrationRaw = data.vibration ? 4095 : 0;
   data.sos = controls.enableSos && buttonPressed();
 
   if (data.pirMotion) {
@@ -562,6 +564,8 @@ void printSerialLog() {
   Serial.print(data.mq7Raw);
   Serial.print(F(",fsr="));
   Serial.print(data.fsrRaw);
+  Serial.print(F(",vibrationRaw="));
+  Serial.print(data.vibrationRaw);
   Serial.print(F(",pir="));
   Serial.print(data.pirMotion);
   Serial.print(F(",dark="));
@@ -596,6 +600,7 @@ TelemetryPayload buildTelemetryPayload() {
   payload.mq135Raw = data.mq135Raw;
   payload.mq7Raw = data.mq7Raw;
   payload.fsrRaw = data.fsrRaw;
+  payload.vibrationRaw = data.vibrationRaw;
   payload.pirMotion = data.pirMotion;
   payload.vibration = data.vibration;
   payload.sos = data.sos;

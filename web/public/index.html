@@ -28,7 +28,6 @@
         </div>
         <div class="top-actions">
           <button id="themeButton" class="ghost-button" type="button"><span>主题</span><strong>切换</strong></button>
-          <button id="demoButton" class="ghost-button" type="button"><span>数据</span><strong>演示</strong></button>
           <button class="ghost-button nav-item active" data-section="overview" type="button"><span>⌂</span><strong>总览</strong></button>
           <button class="ghost-button nav-item" data-section="alarms" type="button"><span>!</span><strong>事件</strong></button>
           <a class="ghost-button page-link" href="./automation.html"><span>联</span><strong>联动页</strong></a>
@@ -136,21 +135,6 @@
               <div><span>危险等级</span><strong id="dangerLevel">--</strong></div>
             </div>
           </article>
-
-          <article class="panel cloud-panel" id="cloud">
-            <div class="panel-head compact">
-              <div>
-                <h2>云平台链路</h2>
-                <span>ESP32 到本地镜像服务的数据状态</span>
-              </div>
-              <span id="cloudStatus" class="tag muted">未连接</span>
-            </div>
-            <div class="cloud-list">
-              <div><span>ProductKey</span><strong id="cloudProduct">--</strong></div>
-              <div><span>DeviceName</span><strong id="cloudDeviceName">--</strong></div>
-              <div><span>最近上报</span><strong id="lastSeen">--</strong></div>
-            </div>
-          </article>
         </section>
 
         <section class="content-grid">
@@ -175,6 +159,7 @@
               <div class="state-grid">
                 <div><span>人体活动 PIR</span><strong id="pir">--</strong></div>
                 <div><span>振动 SW420</span><strong id="vibration">--</strong></div>
+                <div><span>震动量</span><strong id="vibrationRaw">--</strong></div>
                 <div><span>SOS 按键</span><strong id="sos">--</strong></div>
                 <div><span>跌倒强提醒</span><strong id="fallDetected">--</strong></div>
                 <div><span>起夜检测</span><strong id="nightActivity">--</strong></div>
@@ -279,6 +264,11 @@
         </section>
       </main>
     </div>
+
+    <button id="demoButton" class="demo-corner" type="button" aria-pressed="false">
+      <span>模拟演示</span>
+      <strong>关闭</strong>
+    </button>
 
     <script src="./app.js"></script>
   </body>

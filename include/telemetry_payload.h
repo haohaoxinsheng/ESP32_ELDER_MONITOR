@@ -10,6 +10,7 @@ struct TelemetryPayload {
   uint16_t mq135Raw = 0;
   uint16_t mq7Raw = 0;
   uint16_t fsrRaw = 0;
+  uint16_t vibrationRaw = 0;
   bool pirMotion = false;
   bool vibration = false;
   bool sos = false;

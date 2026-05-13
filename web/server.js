@@ -47,9 +47,10 @@ const defaultThresholds = {
   mq135Danger: 2800,
   mq2Warn: 1900,
   mq2Danger: 2400,
-  mq7Warn: 1900,
-  mq7Danger: 2100,
-  tempHigh: 32,
+    mq7Warn: 1900,
+    mq7Danger: 2100,
+    earthquakeWarn: 2600,
+    tempHigh: 32,
   tempLow: 10,
   humidityHigh: 80,
   humidityLow: 25,
@@ -87,6 +88,7 @@ function normalizeTelemetry(input) {
     mq135Raw: Number(input.mq135Raw ?? 0),
     mq7Raw: Number(input.mq7Raw ?? 0),
     fsrRaw: Number(input.fsrRaw ?? 0),
+    vibrationRaw: Number(input.vibrationRaw ?? (input.vibration ? 4095 : 0)),
     pirMotion: Boolean(input.pirMotion),
     vibration: Boolean(input.vibration),
     sos: Boolean(input.sos),
@@ -179,7 +181,6 @@ function applyThresholds(payload) {
   const th = thresholdState;
   const next = { ...payload };
   next.pirMotion = th.enablePir && next.pirMotion;
-  next.vibration = th.enableSw420 && next.vibration;
   next.sos = th.enableSos && next.sos;
   const airDanger = th.enableMq135 && Number(next.mq135Raw) >= th.mq135Danger;
   const airWarning = th.enableMq135 && Number(next.mq135Raw) >= th.mq135Warn;
@@ -191,18 +192,23 @@ function applyThresholds(payload) {
   const tempLow = th.enableDht22 && Number(next.temperatureC) <= th.tempLow;
   const humidityLow = th.enableDht22 && Number(next.humidity) <= th.humidityLow;
   const pressure = th.enableFsr && Number(next.fsrRaw) >= th.fsrPressure;
+  const earthquake = th.enableSw420 && Number(next.vibrationRaw) >= th.earthquakeWarn;
   const warning = airWarning || smokeWarning || coWarning || tempHumid || tempLow || humidityLow || pressure;
 
   next.dark = th.enableBh1750 && Boolean(next.dark || Number(next.lux) <= th.luxDark);
   next.bedOccupied = th.enableFsr && Boolean(next.bedOccupied || Number(next.fsrRaw) >= th.bedPresenceRaw);
   next.nightWakeActive = Boolean(next.nightWakeActive || (next.dark && !next.bedOccupied && next.pirMotion));
   next.nightActivity = Boolean(next.nightActivity || (next.dark && next.pirMotion) || next.nightWakeActive);
-  next.alarmAny = Boolean(next.sos || next.fallDetected || coDanger || smokeDanger || airDanger || warning || next.vibration);
-  next.pushRequired = Boolean(next.pushRequired || next.sos || next.fallDetected || coDanger || smokeDanger || airDanger);
+  next.vibration = th.enableSw420 && Boolean(next.vibration || earthquake);
+  next.alarmAny = Boolean(next.sos || next.fallDetected || earthquake || coDanger || smokeDanger || airDanger || warning || next.vibration);
+  next.pushRequired = Boolean(next.pushRequired || next.sos || next.fallDetected || earthquake || coDanger || smokeDanger || airDanger);
   next.fanOn = Boolean(next.fanOn || coDanger || smokeDanger || airDanger || tempHumid);
   next.ledOn = Boolean(next.ledOn || next.nightActivity || next.alarmAny);
 
-  if (coDanger) {
+  if (earthquake) {
+    next.dangerLevel = 'critical';
+    next.alarmText = 'EARTHQUAKE';
+  } else if (coDanger) {
     next.dangerLevel = 'co_critical';
     next.alarmText = 'CO DANGER';
   } else if (next.fallDetected) {
@@ -355,7 +361,7 @@ function rememberTelemetry(payload) {
     addEvent(
       payload.sos || payload.fallDetected || payload.dangerLevel === 'co_critical' ? 'critical' : payload.alarmAny ? 'alarm' : payload.nightActivity ? 'activity' : 'status',
       payload.fallDetected ? 'FALL DETECTED' : payload.sos ? 'SOS HELP' : payload.alarmText,
-      payload.fallDetected ? '疑似老人跌倒，请立即查看现场' : payload.sos ? '老人主动求助，请立即处理' : payload.dangerLevel === 'co_critical' ? '一氧化碳超标，已启动最高优先级联动' : payload.alarmAny ? '安全告警已触发' : payload.nightActivity ? '暗环境检测到人体活动，已联动开灯' : '状态变化',
+      payload.alarmText === 'EARTHQUAKE' ? '检测到强震动，疑似地震或剧烈撞击，请立即查看现场' : payload.fallDetected ? '疑似老人跌倒，请立即查看现场' : payload.sos ? '老人主动求助，请立即处理' : payload.dangerLevel === 'co_critical' ? '一氧化碳超标，已启动最高优先级联动' : payload.alarmAny ? '安全告警已触发' : payload.nightActivity ? '暗环境检测到人体活动，已联动开灯' : '状态变化',
       payload.timestamp
     );
   }
@@ -422,7 +428,8 @@ function buildMockPayload() {
   const nightActivity = Math.floor(t / 20) % 4 === 1;
   const sos = Math.floor(t / 45) % 6 === 2;
   const fallDetected = Math.floor(t / 55) % 7 === 3;
-  const coDanger = Math.floor(t / 70) % 8 === 4;
+    const coDanger = Math.floor(t / 70) % 8 === 4;
+    const earthquake = Math.floor(t / 90) % 8 === 5;
   const smokeDanger = Math.floor(t / 50) % 7 === 3;
   const alarmAny = sos || fallDetected || coDanger || smokeDanger;
   const bedOccupied = Math.floor(t / 20) % 4 !== 1;
@@ -434,22 +441,23 @@ function buildMockPayload() {
     lux: nightActivity ? 28 : 260 + Math.sin(t / 7) * 80,
     mq135Raw: 1200 + Math.round(Math.sin(t / 10) * 120),
     mq2Raw: smokeDanger ? 2600 : 1000 + Math.round(Math.sin(t / 11) * 130),
-    mq7Raw: coDanger ? 2600 : 900 + Math.round(Math.cos(t / 8) * 100),
+      mq7Raw: coDanger ? 2600 : 900 + Math.round(Math.cos(t / 8) * 100),
+      vibrationRaw: earthquake ? 3400 : Math.max(0, 140 + Math.round(Math.sin(t / 6) * 80)),
     fsrRaw: bedOccupied ? 1700 : 320,
     pirMotion: nightActivity,
-    vibration: false,
+      vibration: earthquake,
     sos,
     fallDetected,
     dark: nightActivity,
     bedOccupied,
     nightWakeActive: nightActivity && !bedOccupied,
     nightActivity,
-    alarmAny,
-    pushRequired: alarmAny,
+      alarmAny: alarmAny || earthquake,
+      pushRequired: alarmAny || earthquake,
     fanOn: coDanger || smokeDanger,
     ledOn: nightActivity || alarmAny,
-    dangerLevel: coDanger ? 'co_critical' : fallDetected || sos ? 'critical' : smokeDanger ? 'danger' : nightActivity ? 'activity' : 'normal',
-    alarmText: coDanger ? 'CO DANGER' : fallDetected ? 'FALL DETECTED' : sos ? 'SOS BUTTON' : smokeDanger ? 'SMOKE DANGER' : nightActivity ? 'NIGHT MOVE' : 'NORMAL',
+      dangerLevel: earthquake ? 'critical' : coDanger ? 'co_critical' : fallDetected || sos ? 'critical' : smokeDanger ? 'danger' : nightActivity ? 'activity' : 'normal',
+      alarmText: earthquake ? 'EARTHQUAKE' : coDanger ? 'CO DANGER' : fallDetected ? 'FALL DETECTED' : sos ? 'SOS BUTTON' : smokeDanger ? 'SMOKE DANGER' : nightActivity ? 'NIGHT MOVE' : 'NORMAL',
     uptimeMs: Math.round(t * 1000)
   });
 }
