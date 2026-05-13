@@ -23,7 +23,8 @@
 | SW420 | 敲击时 `vibration=1` |
 | FSR402 | 按压时 `fsr` 增大 |
 | SOS | 按下时 `sos=1` |
-| 起夜检测 | 暗环境下 PIR 检测到人时 `nightActivity=1` 且 LED 点亮 |
+| 暗环境自动开灯 | Lux 低于阈值且 `darkLight` 开启时 LED 点亮 |
+| 暗环境人体经过亮灯 | 暗环境下 PIR 检测到人时 `nightActivity=1` 且 `nightLight` 开启时 LED 点亮 |
 | 蜂鸣器 | 告警时断续响 |
 | 继电器风扇 | 气体或温湿度告警时启动 |
 | LED | 暗光或告警时点亮 |
@@ -36,5 +37,6 @@
 - DHT22 显示 `nan`：检查 DATA 引脚、供电和上拉电阻。
 - 传感器数值一直很高：MQ 传感器需要预热，模块电位器也会影响输出。
 - 继电器逻辑相反：部分继电器为低电平触发，可把 `digitalWrite(Pins::FAN_RELAY, needVentilation ? HIGH : LOW);` 改成相反。
+- LED 逻辑相反：普通灯珠如果一端接 3.3V、另一端经限流电阻接 GPIO，通常为低电平点亮；修改 `include/devices/actuator_config.h` 里的 `LED_LIGHT_ACTIVE_HIGH` 可切换极性。
 - SOS 一直触发：确认按键模块 DO 接 GPIO12，程序使用 `INPUT_PULLUP`，按下应为低电平。
 - 起夜不亮灯：检查 BH1750 的 Lux 是否低于 `NIGHT_ACTIVITY_LUX`，并确认 PIR 输出会变成 `pir=1`。

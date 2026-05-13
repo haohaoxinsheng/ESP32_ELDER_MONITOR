@@ -108,6 +108,10 @@ String buildAlinkPayload(const TelemetryPayload& payload) {
   params["PushRequired"] = payload.pushRequired ? 1 : 0;
   params["FanOn"] = payload.fanOn ? 1 : 0;
   params["LedOn"] = payload.ledOn ? 1 : 0;
+  params["DarkLightOn"] = payload.darkLightOn ? 1 : 0;
+  params["NightLightOn"] = payload.nightLightOn ? 1 : 0;
+  params["NightWakeLightOn"] = payload.nightWakeLightOn ? 1 : 0;
+  params["AlarmLightOn"] = payload.alarmLightOn ? 1 : 0;
   params["DangerLevel"] = payload.dangerLevel;
   params["AlarmText"] = payload.alarmText;
 
@@ -140,6 +144,10 @@ String buildMirrorPayload(const TelemetryPayload& payload) {
   doc["pushRequired"] = payload.pushRequired;
   doc["fanOn"] = payload.fanOn;
   doc["ledOn"] = payload.ledOn;
+  doc["darkLightOn"] = payload.darkLightOn;
+  doc["nightLightOn"] = payload.nightLightOn;
+  doc["nightWakeLightOn"] = payload.nightWakeLightOn;
+  doc["alarmLightOn"] = payload.alarmLightOn;
   doc["dangerLevel"] = payload.dangerLevel;
   doc["alarmText"] = payload.alarmText;
   doc["uptimeMs"] = millis();
@@ -226,6 +234,7 @@ void applyControlJson(const JsonDocument& doc) {
   deviceControl.enablePir = doc["enablePir"] | deviceControl.enablePir;
   deviceControl.enableSw420 = doc["enableSw420"] | deviceControl.enableSw420;
   deviceControl.enableSos = doc["enableSos"] | deviceControl.enableSos;
+  deviceControl.darkLight = doc["darkLight"] | deviceControl.darkLight;
   deviceControl.nightLight = doc["nightLight"] | deviceControl.nightLight;
   deviceControl.nightWakeMonitor = doc["nightWakeMonitor"] | deviceControl.nightWakeMonitor;
   deviceControl.nightWakeLight = doc["nightWakeLight"] | deviceControl.nightWakeLight;

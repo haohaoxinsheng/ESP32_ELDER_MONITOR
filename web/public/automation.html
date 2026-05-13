@@ -53,14 +53,14 @@
               <span class="automation-icon">☾</span>
               <div>
                 <h2>暗环境联动</h2>
-                <span>光照低于阈值并检测到人体活动时执行</span>
+                <span>光照低于阈值时直接执行</span>
               </div>
               <strong id="darkLightState">关闭</strong>
             </div>
             <div class="switch-list">
               <label class="switch-row">
-                <span><strong>灯光自动开关</strong><small>暗环境 + PIR 活动时打开 LED 灯</small></span>
-                <input type="checkbox" data-control="nightLight" checked />
+                <span><strong>暗环境自动开灯</strong><small>只要光照低于阈值就打开 LED 灯</small></span>
+                <input type="checkbox" data-control="darkLight" checked />
               </label>
               <label class="switch-row">
                 <span><strong>窗帘自动开关</strong><small>暗环境时自动关闭窗帘，白天保持待机</small></span>
@@ -68,8 +68,28 @@
               </label>
             </div>
             <div class="automation-state">
-              <span>灯光</span><strong id="darkLightDetailState">关闭</strong>
+              <span>暗光灯</span><strong id="darkLightDetailState">关闭</strong>
               <span>窗帘</span><strong id="curtainState">待机</strong>
+            </div>
+          </article>
+
+          <article class="panel automation-card" data-status-key="nightLight">
+            <div class="automation-head">
+              <span class="automation-icon">人</span>
+              <div>
+                <h2>暗环境人体联动</h2>
+                <span>光照低于阈值且 PIR 检测到人体活动时执行</span>
+              </div>
+              <strong id="nightLightState">关闭</strong>
+            </div>
+            <div class="switch-list">
+              <label class="switch-row">
+                <span><strong>人体经过开灯</strong><small>暗环境 + PIR 活动时打开 LED 灯并保持一段时间</small></span>
+                <input type="checkbox" data-control="nightLight" checked />
+              </label>
+            </div>
+            <div class="automation-state">
+              <span>人体灯</span><strong id="nightLightDetailState">关闭</strong>
             </div>
           </article>
 

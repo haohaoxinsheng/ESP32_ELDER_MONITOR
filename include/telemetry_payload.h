@@ -23,6 +23,10 @@ struct TelemetryPayload {
   bool pushRequired = false;
   bool fanOn = false;
   bool ledOn = false;
+  bool darkLightOn = false;
+  bool nightLightOn = false;
+  bool nightWakeLightOn = false;
+  bool alarmLightOn = false;
   const char* dangerLevel = "normal";
   const char* alarmText = "NORMAL";
 };
@@ -37,6 +41,7 @@ struct DeviceControlState {
   bool enablePir = true;
   bool enableSw420 = true;
   bool enableSos = true;
+  bool darkLight = true;
   bool nightLight = true;
   bool nightWakeMonitor = true;
   bool nightWakeLight = true;

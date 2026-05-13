@@ -4,6 +4,7 @@ const state = {
   events: [],
   nightRecords: [],
   controls: {
+    darkLight: true,
     nightLight: true,
     nightWakeMonitor: true,
     nightWakeLight: true,
@@ -141,7 +142,9 @@ function setConnection(online, text) {
 
 function effectiveLed(data) {
   if (!data) return false;
-  return (data.nightWakeActive && state.controls.nightWakeLight) ||
+  if (data.darkLightOn || data.nightLightOn || data.nightWakeLightOn || data.alarmLightOn) return true;
+  return (data.dark && state.controls.darkLight) ||
+    (data.nightWakeActive && state.controls.nightWakeLight) ||
     (data.nightActivity && state.controls.nightLight) ||
     (data.alarmAny && state.controls.alarmLight);
 }
@@ -174,10 +177,11 @@ function effectiveNoMotion(data) {
 
 function linkageStatus(data = state.latest) {
   return {
-    darkLight: effectiveLed(data) && Boolean(data?.nightActivity),
-    nightWakeLight: effectiveLed(data) && Boolean(data?.nightWakeActive),
+    darkLight: data?.darkLightOn ?? (Boolean(data?.dark) && state.controls.darkLight),
+    nightLight: data?.nightLightOn ?? (Boolean(data?.nightActivity) && state.controls.nightLight),
+    nightWakeLight: data?.nightWakeLightOn ?? (effectiveLed(data) && Boolean(data?.nightWakeActive)),
     curtain: effectiveCurtain(data),
-    alarmLight: effectiveLed(data) && Boolean(data?.alarmAny),
+    alarmLight: data?.alarmLightOn ?? (effectiveLed(data) && Boolean(data?.alarmAny)),
     fan: effectiveFan(data),
     buzzer: effectiveBuzzer(data),
     servo: effectiveServo(data),
@@ -389,7 +393,11 @@ function deriveAlarm(data) {
   next.alarmAny = Boolean(next.sos || next.fallDetected || earthquake || coDanger || smokeDanger || airDanger || warning || next.vibration);
   next.pushRequired = Boolean(next.pushRequired || next.sos || next.fallDetected || earthquake || coDanger || smokeDanger || airDanger);
   next.fanOn = Boolean(next.fanOn || coDanger || smokeDanger || airDanger || tempHumid);
-  next.ledOn = Boolean(next.ledOn || next.nightActivity || next.alarmAny);
+  next.darkLightOn = Boolean(next.darkLightOn || (next.dark && state.controls.darkLight));
+  next.nightLightOn = Boolean(next.nightLightOn || (next.nightActivity && state.controls.nightLight));
+  next.nightWakeLightOn = Boolean(next.nightWakeLightOn || (next.nightWakeActive && state.controls.nightWakeLight));
+  next.alarmLightOn = Boolean(next.alarmLightOn || (next.alarmAny && state.controls.alarmLight));
+  next.ledOn = Boolean(next.ledOn || next.darkLightOn || next.nightLightOn || next.nightWakeLightOn || next.alarmLightOn);
 
   if (earthquake) {
     next.dangerLevel = 'critical';
@@ -765,6 +773,8 @@ function renderAutomationPage(data) {
   const rows = [
     ['darkLightState', status.darkLight ? '开启' : '关闭'],
     ['darkLightDetailState', status.darkLight ? '开启' : '关闭'],
+    ['nightLightState', status.nightLight ? '开启' : '关闭'],
+    ['nightLightDetailState', status.nightLight ? '开启' : '关闭'],
     ['nightWakeLightState', status.nightWakeLight ? '开启' : '关闭'],
     ['curtainState', status.curtain ? '关闭' : '待机'],
     ['alarmLightState', status.alarmLight ? '开启' : '关闭'],
@@ -839,6 +849,10 @@ function demoPayload() {
     alarmAny,
     pushRequired: alarmAny,
     fanOn: coDanger || smokeDanger,
+    darkLightOn: nightActivity,
+    nightLightOn: nightActivity,
+    nightWakeLightOn: nightActivity && !bedOccupied,
+    alarmLightOn: alarmAny,
     ledOn: nightActivity || alarmAny,
     dangerLevel: earthquake ? 'critical' : coDanger ? 'co_critical' : fallDetected || sos ? 'critical' : smokeDanger ? 'danger' : nightActivity ? 'activity' : 'normal',
     alarmText: earthquake ? 'EARTHQUAKE' : coDanger ? 'CO DANGER' : fallDetected ? 'FALL DETECTED' : sos ? 'SOS BUTTON' : smokeDanger ? 'SMOKE DANGER' : nightActivity ? 'NIGHT MOVE' : 'NORMAL',

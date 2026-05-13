@@ -23,6 +23,7 @@ const mockFile = path.join(dataDir, 'mock.json');
 let mockEnabled = loadMockState();
 let mockTimer = null;
 const controlState = {
+  darkLight: true,
   nightLight: true,
   nightWakeMonitor: true,
   nightWakeLight: true,
@@ -101,6 +102,10 @@ function normalizeTelemetry(input) {
     pushRequired: Boolean(input.pushRequired),
     fanOn: Boolean(input.fanOn),
     ledOn: Boolean(input.ledOn),
+    darkLightOn: Boolean(input.darkLightOn),
+    nightLightOn: Boolean(input.nightLightOn),
+    nightWakeLightOn: Boolean(input.nightWakeLightOn),
+    alarmLightOn: Boolean(input.alarmLightOn),
     dangerLevel: String(input.dangerLevel || 'normal'),
     alarmText: String(input.alarmText || 'NORMAL'),
     uptimeMs: Number(input.uptimeMs ?? 0)
@@ -203,7 +208,11 @@ function applyThresholds(payload) {
   next.alarmAny = Boolean(next.sos || next.fallDetected || earthquake || coDanger || smokeDanger || airDanger || warning || next.vibration);
   next.pushRequired = Boolean(next.pushRequired || next.sos || next.fallDetected || earthquake || coDanger || smokeDanger || airDanger);
   next.fanOn = Boolean(next.fanOn || coDanger || smokeDanger || airDanger || tempHumid);
-  next.ledOn = Boolean(next.ledOn || next.nightActivity || next.alarmAny);
+  next.darkLightOn = Boolean(next.darkLightOn || (next.dark && controlState.darkLight));
+  next.nightLightOn = Boolean(next.nightLightOn || (next.nightActivity && controlState.nightLight));
+  next.nightWakeLightOn = Boolean(next.nightWakeLightOn || (next.nightWakeActive && controlState.nightWakeLight));
+  next.alarmLightOn = Boolean(next.alarmLightOn || (next.alarmAny && controlState.alarmLight));
+  next.ledOn = Boolean(next.ledOn || next.darkLightOn || next.nightLightOn || next.nightWakeLightOn || next.alarmLightOn);
 
   if (earthquake) {
     next.dangerLevel = 'critical';
@@ -263,6 +272,7 @@ function effectiveLinkage(payload = latestTelemetry) {
   if (!payload) {
     return {
       darkLight: false,
+      nightLight: false,
       curtain: false,
       alarmLight: false,
       fan: false,
@@ -275,7 +285,8 @@ function effectiveLinkage(payload = latestTelemetry) {
 
   const alarmActive = Boolean(payload.alarmAny || payload.sos || payload.fallDetected || payload.dangerLevel === 'co_critical');
   return {
-    darkLight: Boolean(payload.nightActivity) && controlState.nightLight,
+    darkLight: Boolean(payload.dark) && controlState.darkLight,
+    nightLight: Boolean(payload.nightActivity) && controlState.nightLight,
     nightWakeLight: Boolean(payload.nightWakeActive) && controlState.nightWakeLight,
     curtain: Boolean(payload.dark || payload.nightActivity) && controlState.curtainAuto,
     alarmLight: Boolean(payload.alarmAny) && controlState.alarmLight,
@@ -451,11 +462,15 @@ function buildMockPayload() {
     dark: nightActivity,
     bedOccupied,
     nightWakeActive: nightActivity && !bedOccupied,
-    nightActivity,
+      nightActivity,
       alarmAny: alarmAny || earthquake,
       pushRequired: alarmAny || earthquake,
-    fanOn: coDanger || smokeDanger,
-    ledOn: nightActivity || alarmAny,
+      fanOn: coDanger || smokeDanger,
+      darkLightOn: nightActivity,
+      nightLightOn: nightActivity,
+      nightWakeLightOn: nightActivity && !bedOccupied,
+      alarmLightOn: alarmAny || earthquake,
+      ledOn: nightActivity || alarmAny || earthquake,
       dangerLevel: earthquake ? 'critical' : coDanger ? 'co_critical' : fallDetected || sos ? 'critical' : smokeDanger ? 'danger' : nightActivity ? 'activity' : 'normal',
       alarmText: earthquake ? 'EARTHQUAKE' : coDanger ? 'CO DANGER' : fallDetected ? 'FALL DETECTED' : sos ? 'SOS BUTTON' : smokeDanger ? 'SMOKE DANGER' : nightActivity ? 'NIGHT MOVE' : 'NORMAL',
     uptimeMs: Math.round(t * 1000)

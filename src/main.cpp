@@ -97,6 +97,10 @@ bool oledOk = false;
 bool bh1750Ok = false;
 bool fanOn = false;
 bool ledOn = false;
+bool darkLightOn = false;
+bool nightLightOn = false;
+bool nightWakeLightOn = false;
+bool alarmLightOn = false;
 
 void setBuzzer(bool on) {
   buzzerOn = on;
@@ -112,6 +116,12 @@ void setBuzzer(bool on) {
   } else {
     noTone(ActuatorConfig::BUZZER_PIN);
   }
+}
+
+void setLedLight(bool on) {
+  const uint8_t activeLevel = ActuatorConfig::LED_LIGHT_ACTIVE_HIGH ? HIGH : LOW;
+  const uint8_t inactiveLevel = ActuatorConfig::LED_LIGHT_ACTIVE_HIGH ? LOW : HIGH;
+  digitalWrite(ActuatorConfig::LED_LIGHT_PIN, on ? activeLevel : inactiveLevel);
 }
 
 // SOS 按键去抖：读取按键状态并保证稳定后返回按下状态
@@ -215,19 +225,20 @@ void updateActuators() {
   digitalWrite(ActuatorConfig::FAN_RELAY_PIN, fanOn ? HIGH : LOW);
 
   const bool bedOccupied = controls.enableFsr && data.fsrRaw >= Fsr402Config::BED_OCCUPIED_RAW;
-  const bool nightWakeLight = controls.nightWakeLight && controls.enablePir && activityState.dark && !bedOccupied && data.pirMotion;
-  const bool autoLight = (controls.nightLight && activityState.nightActivity) || nightWakeLight;
-  const bool alarmLight = controls.alarmLight && alarmState.any;
-  ledOn = autoLight || alarmLight;
+  darkLightOn = controls.darkLight && activityState.dark;
+  nightLightOn = controls.nightLight && activityState.nightActivity;
+  nightWakeLightOn = controls.nightWakeLight && controls.enablePir && activityState.dark && !bedOccupied && data.pirMotion;
+  alarmLightOn = controls.alarmLight && alarmState.any;
+  ledOn = darkLightOn || nightLightOn || nightWakeLightOn || alarmLightOn;
   if (alarmState.critical && controls.alarmLight) {
     const uint32_t now = millis();
     if (now - lastLedBlinkMs >= Timing::CRITICAL_BLINK_INTERVAL_MS) {
       lastLedBlinkMs = now;
       ledBlinkOn = !ledBlinkOn;
     }
-    digitalWrite(ActuatorConfig::LED_LIGHT_PIN, ledBlinkOn ? HIGH : LOW);
+    setLedLight(ledBlinkOn);
   } else {
-    digitalWrite(ActuatorConfig::LED_LIGHT_PIN, ledOn ? HIGH : LOW);
+    setLedLight(ledOn);
   }
 
   if (alarmState.sos && controls.sosServo) {
@@ -614,6 +625,10 @@ TelemetryPayload buildTelemetryPayload() {
   payload.pushRequired = alarmState.pushRequired;
   payload.fanOn = fanOn;
   payload.ledOn = ledOn;
+  payload.darkLightOn = darkLightOn;
+  payload.nightLightOn = nightLightOn;
+  payload.nightWakeLightOn = nightWakeLightOn;
+  payload.alarmLightOn = alarmLightOn;
   payload.dangerLevel = dangerLevelText();
   payload.alarmText = primaryAlarmText();
   return payload;
@@ -630,7 +645,7 @@ void setupPins() {
 
   setBuzzer(false);
   digitalWrite(ActuatorConfig::FAN_RELAY_PIN, LOW);
-  digitalWrite(ActuatorConfig::LED_LIGHT_PIN, LOW);
+  setLedLight(false);
 
   analogReadResolution(12);
   analogSetPinAttenuation(Mq2Config::AOUT_PIN, ADC_11db);

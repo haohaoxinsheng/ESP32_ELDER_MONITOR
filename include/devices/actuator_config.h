@@ -10,6 +10,7 @@ constexpr uint8_t SERVO_PWM_PIN = 16;
 
 constexpr bool BUZZER_ACTIVE_HIGH = true;
 constexpr bool BUZZER_IS_ACTIVE = true;
+constexpr bool LED_LIGHT_ACTIVE_HIGH = false;
 constexpr uint16_t PASSIVE_BUZZER_FREQUENCY_HZ = 2000;
 
 constexpr uint8_t SERVO_NORMAL_ANGLE = 10;
