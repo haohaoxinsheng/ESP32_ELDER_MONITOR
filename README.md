@@ -44,7 +44,7 @@
 
 ## 四、PlatformIO 使用
 
-1. 用 VS Code 打开 `C:\Users\19573\Desktop\developer\esp32_elder_monitor`。
+1. 用 VS Code 打开 `C:\Users\xxxxxx\Desktop\developer\esp32_elder_monitor`。
 2. 安装 PlatformIO 插件。
 3. 连接 ESP32-S3-N16R8 开发板。
 4. 在 PlatformIO 中执行 `Build` 编译。
@@ -138,7 +138,7 @@ MQ135、MQ7、FSR402、震动量在不同接线和模块电位器状态下原始
 进入网页目录：
 
 ```powershell
-cd C:\Users\19573\Desktop\实习开发\esp32_elder_monitor\web
+cd C:\Users\xxxxxx\Desktop\developer\esp32_elder_monitor\web
 copy .env.example .env
 npm install
 npm start
