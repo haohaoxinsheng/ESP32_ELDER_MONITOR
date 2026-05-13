@@ -125,6 +125,15 @@ void setLedLight(bool on) {
   digitalWrite(ActuatorConfig::LED_LIGHT_PIN, on ? activeLevel : inactiveLevel);
 }
 
+bool isBedOccupied(const DeviceControlState& controls) {
+  return controls.enableFsr && data.fsrRaw >= Fsr402Config::BED_OCCUPIED_RAW;
+}
+
+bool isVentilationNeeded() {
+  return alarmState.airDanger || alarmState.smokeWarning ||
+         alarmState.coWarning || alarmState.tempHumidity;
+}
+
 // SOS 按键去抖：读取按键状态并保证稳定后返回按下状态
 bool buttonPressed() {
   const bool reading = digitalRead(SosButtonConfig::PIN);
@@ -185,21 +194,25 @@ void updateActivityState() {
       (now - lastNightActivityMs <= Timing::NIGHT_LIGHT_HOLD_MS);
 }
 
-void updateAlarmState() {
-  const uint32_t now = millis();
-  const DeviceControlState& controls = AliyunClient::controlState();
+void updateGasAlarms(const DeviceControlState& controls) {
   alarmState.airWarning = controls.enableMq135 && data.mq135Raw >= Mq135Config::WARN_RAW;
   alarmState.airDanger = controls.enableMq135 && data.mq135Raw >= Mq135Config::DANGER_RAW;
   alarmState.smokeWarning = controls.enableMq2 && data.mq2Raw >= Mq2Config::WARN_RAW;
   alarmState.smokeDanger = controls.enableMq2 && data.mq2Raw >= Mq2Config::DANGER_RAW;
   alarmState.coWarning = controls.enableMq7 && data.mq7Raw >= Mq7Config::WARN_RAW;
   alarmState.coDanger = controls.enableMq7 && data.mq7Raw >= Mq7Config::DANGER_RAW;
+}
+
+void updateComfortAlarms(const DeviceControlState& controls) {
   alarmState.tempHumidity =
       controls.enableDht22 &&
       ((!isnan(data.temperatureC) && data.temperatureC >= Dht22Config::TEMP_HIGH_C) ||
        (!isnan(data.humidity) && data.humidity >= Dht22Config::HUMIDITY_HIGH_PERCENT));
   alarmState.tempLow = controls.enableDht22 && !isnan(data.temperatureC) && data.temperatureC <= Dht22Config::TEMP_LOW_C;
   alarmState.humidityLow = controls.enableDht22 && !isnan(data.humidity) && data.humidity <= Dht22Config::HUMIDITY_LOW_PERCENT;
+}
+
+void updateActivityAlarms(const DeviceControlState& controls, uint32_t now) {
   alarmState.pressure = controls.enableFsr && data.fsrRaw >= Fsr402Config::PRESS_WARN_RAW;
   alarmState.vibration = controls.enableSw420 && data.vibration;
   alarmState.noMotion = controls.noMotionWarning && (now - lastMotionMs) >= Timing::NO_MOTION_WARNING_MS;
@@ -209,6 +222,9 @@ void updateAlarmState() {
       (now - lastMotionMs >= Timing::FALL_NO_MOTION_MS);
   // 只有在检测到压力、振动和长时间无运动时才判定为跌倒
   alarmState.sos = controls.enableSos && data.sos;
+}
+
+void finalizeAlarmState() {
   alarmState.critical = alarmState.coDanger || alarmState.fallDetected || alarmState.sos;
   alarmState.pushRequired = alarmState.critical || alarmState.airDanger || alarmState.smokeDanger || alarmState.noMotion;
   alarmState.any = alarmState.airWarning || alarmState.airDanger ||
@@ -219,15 +235,22 @@ void updateAlarmState() {
                    alarmState.noMotion || alarmState.fallDetected || alarmState.sos;
 }
 
-// 控制执行器：风扇、指示灯、蜂鸣器、舵机根据当前警报状态和活动状态动作
-void updateActuators() {
+void updateAlarmState() {
+  const uint32_t now = millis();
   const DeviceControlState& controls = AliyunClient::controlState();
-  const bool needVentilation =
-      alarmState.airDanger || alarmState.smokeWarning || alarmState.coWarning || alarmState.tempHumidity;
-  fanOn = needVentilation && controls.fanVentilation;
-  digitalWrite(ActuatorConfig::FAN_RELAY_PIN, fanOn ? HIGH : LOW);
+  updateGasAlarms(controls);
+  updateComfortAlarms(controls);
+  updateActivityAlarms(controls, now);
+  finalizeAlarmState();
+}
 
-  const bool bedOccupied = controls.enableFsr && data.fsrRaw >= Fsr402Config::BED_OCCUPIED_RAW;
+void updateFan(const DeviceControlState& controls) {
+  fanOn = isVentilationNeeded() && controls.fanVentilation;
+  digitalWrite(ActuatorConfig::FAN_RELAY_PIN, fanOn ? HIGH : LOW);
+}
+
+void updateLighting(const DeviceControlState& controls) {
+  const bool bedOccupied = isBedOccupied(controls);
   darkLightOn = controls.darkLight && activityState.dark;
   nightLightOn = controls.nightLight && activityState.nightActivity;
   nightWakeLightOn = controls.nightWakeLight && controls.enablePir && activityState.dark && !bedOccupied && data.pirMotion;
@@ -243,7 +266,9 @@ void updateActuators() {
   } else {
     setLedLight(ledOn);
   }
+}
 
+void updateServoPosition(const DeviceControlState& controls) {
   if (alarmState.sos && controls.sosServo) {
     servo.write(ActuatorConfig::SERVO_SOS_ANGLE);
   } else if (activityState.dark && controls.curtainAuto) {
@@ -251,7 +276,9 @@ void updateActuators() {
   } else {
     servo.write(ActuatorConfig::SERVO_NORMAL_ANGLE);
   }
+}
 
+void updateBuzzerAlarm(const DeviceControlState& controls) {
   if (!alarmState.any || !controls.buzzerAlarm) {
     setBuzzer(false);
     lastAlarmAny = false;
@@ -276,6 +303,15 @@ void updateActuators() {
     lastBeepToggleMs = now;
     setBuzzer(!buzzerOn);
   }
+}
+
+// 控制执行器：风扇、指示灯、蜂鸣器、舵机根据当前警报状态和活动状态动作
+void updateActuators() {
+  const DeviceControlState& controls = AliyunClient::controlState();
+  updateFan(controls);
+  updateLighting(controls);
+  updateServoPosition(controls);
+  updateBuzzerAlarm(controls);
 }
 
 const char* primaryAlarmText() {
@@ -621,7 +657,7 @@ TelemetryPayload buildTelemetryPayload() {
   payload.fallDetected = alarmState.fallDetected;
   payload.dark = activityState.dark;
   const DeviceControlState& controls = AliyunClient::controlState();
-  payload.bedOccupied = controls.enableFsr && data.fsrRaw >= Fsr402Config::BED_OCCUPIED_RAW;
+  payload.bedOccupied = isBedOccupied(controls);
   payload.nightWakeActive = controls.enablePir && activityState.dark && !payload.bedOccupied && data.pirMotion;
   payload.nightActivity = activityState.nightActivity;
   payload.alarmAny = alarmState.any;
@@ -682,6 +718,52 @@ void setupDevices() {
     display.display();
   }
 }
+
+void updateFastState() {
+  data.sos = AliyunClient::controlState().enableSos && buttonPressed();
+  AliyunClient::loop();
+  updateActivityState();
+  updateAlarmState();
+}
+
+void runSensorTask(uint32_t now) {
+  if (now - lastSensorReadMs < Timing::SENSOR_INTERVAL_MS) {
+    return;
+  }
+
+  lastSensorReadMs = now;
+  readSensors();
+  updateActivityState();
+  updateAlarmState();
+  updateActuators();
+}
+
+void runDisplayTask(uint32_t now) {
+  if (now - lastDisplayMs < Timing::DISPLAY_INTERVAL_MS) {
+    return;
+  }
+
+  lastDisplayMs = now;
+  drawDisplay();
+}
+
+void runSerialTask(uint32_t now) {
+  if (now - lastSerialMs < Timing::SERIAL_INTERVAL_MS) {
+    return;
+  }
+
+  lastSerialMs = now;
+  printSerialLog();
+}
+
+void runCloudPublishTask(uint32_t now) {
+  if (now - lastCloudPublishMs < CloudConfig::CLOUD_PUBLISH_INTERVAL_MS) {
+    return;
+  }
+
+  lastCloudPublishMs = now;
+  AliyunClient::publishTelemetry(buildTelemetryPayload());
+}
 }  // namespace
 
 void setup() {
@@ -703,35 +785,10 @@ void setup() {
 
 void loop() {
   const uint32_t now = millis();
-
-  // 主循环：实时更新按键、云端状态、活动和警报状态
-  data.sos = AliyunClient::controlState().enableSos && buttonPressed();
-  AliyunClient::loop();
-  updateActivityState();
-  updateAlarmState();
-
-  if (now - lastSensorReadMs >= Timing::SENSOR_INTERVAL_MS) {
-    lastSensorReadMs = now;
-    readSensors();
-    updateActivityState();
-    updateAlarmState();
-    updateActuators();
-  }
-
-  if (now - lastDisplayMs >= Timing::DISPLAY_INTERVAL_MS) {
-    lastDisplayMs = now;
-    drawDisplay();
-  }
-
-  if (now - lastSerialMs >= Timing::SERIAL_INTERVAL_MS) {
-    lastSerialMs = now;
-    printSerialLog();
-  }
-
-  if (now - lastCloudPublishMs >= CloudConfig::CLOUD_PUBLISH_INTERVAL_MS) {
-    lastCloudPublishMs = now;
-    AliyunClient::publishTelemetry(buildTelemetryPayload());
-  }
-
+  updateFastState();
+  runSensorTask(now);
+  runDisplayTask(now);
+  runSerialTask(now);
+  runCloudPublishTask(now);
   updateActuators();
 }

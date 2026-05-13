@@ -189,23 +189,24 @@ function linkageStatus(data = state.latest) {
   };
 }
 
-function renderLatest(data) {
-  if (!data) {
-    setConnection(false);
-    return;
-  }
+function isCriticalTelemetry(data) {
+  return Boolean(data?.sos || data?.fallDetected ||
+    data?.dangerLevel === 'co_critical' || data?.alarmText === 'EARTHQUAKE');
+}
 
-  setConnection(true);
-  const critical = Boolean(data.sos || data.fallDetected || data.dangerLevel === 'co_critical' || data.alarmText === 'EARTHQUAKE');
-  const criticalType = criticalTypeOf(data);
-  const muted = critical && state.criticalMutedType === criticalType && Date.now() < state.criticalMuteUntil;
-  const activeCritical = critical && !muted;
-  const activeAlarm = Boolean(data.alarmAny && !muted);
+function isCriticalMuted(data, criticalType) {
+  return Boolean(data && state.criticalMutedType === criticalType && Date.now() < state.criticalMuteUntil);
+}
+
+function renderStatusClasses(data, activeCritical, muted) {
   toggleClass('statusPanel', 'warn', Boolean(data.alarmAny || data.sos));
   toggleClass('statusPanel', 'critical', activeCritical);
   toggleSelectorClass('.topbar', 'critical-active', activeCritical);
   toggleClass('alertStrip', 'warning', Boolean((data.alarmAny || muted) && !activeCritical));
   toggleClass('alertStrip', 'danger', activeCritical);
+}
+
+function renderHeroReadings(data) {
   setText('alarmText', alarmLabel(data.alarmText));
   setText('deviceText', `${data.deviceName || '--'} ${data.productKey ? ` | ${data.productKey}` : ''}`);
   setText('temperature', fmtNumber(data.temperatureC));
@@ -214,6 +215,9 @@ function renderLatest(data) {
   setText('mq2Hero', data.mq2Raw ?? '--');
   setText('mq135Hero', data.mq135Raw ?? '--');
   setText('mq7Hero', data.mq7Raw ?? '--');
+}
+
+function renderSensorReadings(data) {
   setText('mq2', data.mq2Raw ?? '--');
   setText('mq135', data.mq135Raw ?? '--');
   setText('mq7', data.mq7Raw ?? '--');
@@ -227,16 +231,42 @@ function renderLatest(data) {
   setText('bedOccupied', yesNo(data.bedOccupied));
   setText('nightWakeActive', yesNo(data.nightWakeActive));
   setText('dark', yesNo(data.dark));
+}
+
+function renderActuatorReadings(data) {
   setText('ledOn', onOff(effectiveLed(data)));
   setText('fanOn', onOff(effectiveFan(data)));
   setText('buzzerOn', onOff(effectiveBuzzer(data)));
   setText('servoOn', effectiveServo(data) ? '动作' : '复位');
   setText('curtainOn', effectiveCurtain(data) ? '关闭' : '待机');
+}
+
+function renderStatePills(data) {
   setText('sosPill', data.sos ? 'SOS 已触发' : 'SOS 正常');
   setText('fallPill', data.fallDetected ? '疑似跌倒' : '跌倒正常');
   setText('nightPill', data.nightActivity ? '起夜开灯中' : '未检测起夜');
   toggleClass('sosPill', 'critical', Boolean(data.sos));
   toggleClass('fallPill', 'critical', Boolean(data.fallDetected));
+}
+
+function renderLatest(data) {
+  if (!data) {
+    setConnection(false);
+    return;
+  }
+
+  setConnection(true);
+  const critical = isCriticalTelemetry(data);
+  const criticalType = criticalTypeOf(data);
+  const muted = critical && isCriticalMuted(data, criticalType);
+  const activeCritical = critical && !muted;
+  const activeAlarm = Boolean(data.alarmAny && !muted);
+
+  renderStatusClasses(data, activeCritical, muted);
+  renderHeroReadings(data);
+  renderSensorReadings(data);
+  renderActuatorReadings(data);
+  renderStatePills(data);
   setText('updatedAt', new Date(data.timestamp).toLocaleString());
   renderOperationalSummary(data);
   renderAlertSummary(data, activeCritical, muted);

@@ -48,10 +48,10 @@ const defaultThresholds = {
   mq135Danger: 2800,
   mq2Warn: 1900,
   mq2Danger: 2400,
-    mq7Warn: 1900,
-    mq7Danger: 2100,
-    earthquakeWarn: 2600,
-    tempHigh: 32,
+  mq7Warn: 1900,
+  mq7Danger: 2100,
+  earthquakeWarn: 2600,
+  tempHigh: 32,
   tempLow: 10,
   humidityHigh: 80,
   humidityLow: 25,
@@ -540,98 +540,119 @@ function serveStatic(urlPath, res) {
   fs.createReadStream(filePath).pipe(res);
 }
 
+function healthPayload() {
+  return {
+    ok: true,
+    latest: latestTelemetry,
+    historyCount: history.length,
+    controls: controlState,
+    linkage: effectiveLinkage(),
+    mock: { enabled: mockEnabled }
+  };
+}
+
+function handleGetApi(pathname, req, res) {
+  if (pathname === '/api/health') {
+    sendJson(res, 200, healthPayload());
+    return true;
+  }
+
+  if (pathname === '/api/telemetry/latest') {
+    sendJson(res, 200, latestTelemetry || {});
+    return true;
+  }
+
+  if (pathname === '/api/telemetry/history') {
+    sendJson(res, 200, history);
+    return true;
+  }
+
+  if (pathname === '/api/events') {
+    sendJson(res, 200, events);
+    return true;
+  }
+
+  if (pathname === '/api/night-records') {
+    sendJson(res, 200, nightRecords);
+    return true;
+  }
+
+  if (pathname === '/api/control') {
+    sendJson(res, 200, { ...controlState, ...thresholdState });
+    return true;
+  }
+
+  if (pathname === '/api/linkage/status') {
+    sendJson(res, 200, { controls: controlState, latest: latestTelemetry, effective: effectiveLinkage() });
+    return true;
+  }
+
+  if (pathname === '/api/thresholds') {
+    sendJson(res, 200, thresholdState);
+    return true;
+  }
+
+  if (pathname === '/api/mock') {
+    sendJson(res, 200, { enabled: mockEnabled });
+    return true;
+  }
+
+  if (pathname === '/api/stream') {
+    handleSse(req, res);
+    return true;
+  }
+
+  return false;
+}
+
+async function parseJsonBody(req) {
+  const body = await readRequestBody(req);
+  return JSON.parse(body || '{}');
+}
+
+async function handlePostApi(pathname, req, res) {
+  if (pathname === '/api/control') {
+    sendJson(res, 200, updateControls(await parseJsonBody(req)));
+    return true;
+  }
+
+  if (pathname === '/api/thresholds') {
+    sendJson(res, 200, saveThresholds(await parseJsonBody(req)));
+    return true;
+  }
+
+  if (pathname === '/api/mock') {
+    const input = await parseJsonBody(req);
+    sendJson(res, 200, setMockEnabled(input.enabled));
+    return true;
+  }
+
+  if (pathname === '/api/telemetry') {
+    const token = req.headers['x-device-token'] || '';
+    if (expectedToken && token !== expectedToken) {
+      sendJson(res, 401, { ok: false, error: 'invalid token' });
+      return true;
+    }
+
+    const payload = normalizeTelemetry(await parseJsonBody(req));
+    rememberTelemetry(payload);
+    sendJson(res, 200, { ok: true });
+    return true;
+  }
+
+  return false;
+}
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 
   try {
-    if (req.method === 'GET' && url.pathname === '/api/health') {
-      sendJson(res, 200, { ok: true, latest: latestTelemetry, historyCount: history.length, controls: controlState, linkage: effectiveLinkage(), mock: { enabled: mockEnabled } });
-      return;
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/telemetry/latest') {
-      sendJson(res, 200, latestTelemetry || {});
-      return;
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/telemetry/history') {
-      sendJson(res, 200, history);
-      return;
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/events') {
-      sendJson(res, 200, events);
-      return;
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/night-records') {
-      sendJson(res, 200, nightRecords);
-      return;
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/control') {
-      sendJson(res, 200, { ...controlState, ...thresholdState });
-      return;
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/linkage/status') {
-      sendJson(res, 200, { controls: controlState, latest: latestTelemetry, effective: effectiveLinkage() });
-      return;
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/thresholds') {
-      sendJson(res, 200, thresholdState);
-      return;
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/mock') {
-      sendJson(res, 200, { enabled: mockEnabled });
-      return;
-    }
-
-    if (req.method === 'GET' && url.pathname === '/api/stream') {
-      handleSse(req, res);
-      return;
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/control') {
-      const body = await readRequestBody(req);
-      sendJson(res, 200, updateControls(JSON.parse(body || '{}')));
-      return;
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/thresholds') {
-      const body = await readRequestBody(req);
-      sendJson(res, 200, saveThresholds(JSON.parse(body || '{}')));
-      return;
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/mock') {
-      const body = await readRequestBody(req);
-      const input = JSON.parse(body || '{}');
-      sendJson(res, 200, setMockEnabled(input.enabled));
-      return;
-    }
-
-    if (req.method === 'POST' && url.pathname === '/api/telemetry') {
-      const token = req.headers['x-device-token'] || '';
-      if (expectedToken && token !== expectedToken) {
-        sendJson(res, 401, { ok: false, error: 'invalid token' });
-        return;
-      }
-
-      const body = await readRequestBody(req);
-      const payload = normalizeTelemetry(JSON.parse(body || '{}'));
-      rememberTelemetry(payload);
-      sendJson(res, 200, { ok: true });
-      return;
-    }
-
+    if (req.method === 'GET' && handleGetApi(url.pathname, req, res)) return;
+    if (req.method === 'POST' && await handlePostApi(url.pathname, req, res)) return;
     if (req.method === 'GET') {
       serveStatic(url.pathname, res);
       return;
     }
-
     sendJson(res, 405, { ok: false, error: 'method not allowed' });
   } catch (error) {
     sendJson(res, 500, { ok: false, error: error.message });
