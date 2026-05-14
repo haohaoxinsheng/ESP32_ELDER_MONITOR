@@ -10,8 +10,10 @@
     <div class="app-shell">
       <div id="criticalBanner" class="critical-banner safe">
         <span id="criticalIcon" class="banner-icon">✓</span>
-        <strong id="criticalTitle">系统安全</strong>
-        <span id="criticalText">暂无危险报警，设备正在持续监测。</span>
+        <div class="banner-copy">
+          <strong id="criticalTitle">系统安全</strong>
+          <span id="criticalText">暂无危险报警，设备正在持续监测。</span>
+        </div>
         <button id="ackCritical" type="button">已知晓</button>
       </div>
 
@@ -27,15 +29,19 @@
           </div>
         </div>
         <div class="top-actions">
-          <button id="themeButton" class="ghost-button" type="button"><span>主题</span><strong>切换</strong></button>
-          <a class="ghost-button page-link" href="./index.html"><span>⌂</span><strong>总览</strong></a>
-          <a class="ghost-button page-link" href="./automation.html"><span>联</span><strong>联动页</strong></a>
           <div class="connection">
             <span id="connDot" class="dot"></span>
             <span id="connText">等待数据</span>
           </div>
         </div>
       </header>
+
+      <nav class="floating-nav" aria-label="页面导航">
+        <button id="themeButton" class="ghost-button" type="button"><span>主题</span><strong>切换</strong></button>
+        <a class="ghost-button page-link" href="./index.html"><span>⌂</span><strong>总览</strong></a>
+        <a class="ghost-button page-link" href="./automation.html"><span>联</span><strong>联动页</strong></a>
+        <a class="ghost-button page-link active" href="./settings.html"><span>⚙</span><strong>设置页</strong></a>
+      </nav>
 
       <main>
         <section class="alert-strip" id="alertStrip">
@@ -195,6 +201,10 @@
       <strong>关闭</strong>
     </button>
 
+    <script src="./shared/monitor-model.js"></script>
+    <script src="./scripts/monitor-core.js"></script>
+    <script src="./scripts/monitor-render.js"></script>
+    <script src="./scripts/monitor-runtime.js"></script>
     <script src="./app.js"></script>
   </body>
 </html>

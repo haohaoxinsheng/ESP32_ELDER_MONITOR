@@ -1,0 +1,373 @@
+/* 布局层：顶部栏、悬浮页签、主区域网格和响应式断点。 */
+.critical-banner {
+  position: fixed;
+  top: 16px;
+  right: 20px;
+  left: auto;
+  z-index: 30;
+  width: min(420px, calc(100vw - 32px));
+  min-height: 0;
+  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: 12px;
+  border: 1px solid var(--frost-border);
+  border-radius: var(--surface-radius);
+  background: linear-gradient(135deg, rgba(16, 135, 84, 0.82), rgba(27, 93, 74, 0.7));
+  backdrop-filter: var(--frost-backdrop);
+  -webkit-backdrop-filter: var(--frost-backdrop);
+  color: #fff;
+  box-shadow: var(--frost-shadow);
+  opacity: 0;
+  transform: translateY(-10px) scale(0.98);
+  pointer-events: none;
+  transition: opacity 0.28s ease, transform 0.28s ease, box-shadow 0.28s ease, background 0.28s ease;
+}
+
+.critical-banner.safe {
+  background: linear-gradient(135deg, rgba(16, 135, 84, 0.82), rgba(27, 93, 74, 0.7));
+  box-shadow: 0 10px 28px rgba(20, 122, 60, 0.22);
+}
+
+.critical-banner.show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+  pointer-events: auto;
+}
+
+.critical-banner.danger {
+  background: linear-gradient(135deg, rgba(180, 35, 24, 0.88), rgba(255, 90, 102, 0.72));
+  animation: flash 1.2s infinite alternate;
+  box-shadow: 0 18px 40px rgba(180, 35, 24, 0.3);
+}
+
+.critical-banner .banner-copy {
+  min-width: 0;
+  flex: 1;
+  display: grid;
+  gap: 4px;
+}
+
+.critical-banner .banner-copy span {
+  color: rgba(255, 255, 255, 0.84);
+  line-height: 1.45;
+}
+
+.critical-banner strong {
+  display: block;
+  font-size: 16px;
+}
+
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  --scroll-progress: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 22px 28px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  background: var(--topbar-bg);
+  backdrop-filter: blur(var(--top-blur)) saturate(132%);
+  -webkit-backdrop-filter: blur(var(--top-blur)) saturate(132%);
+  opacity: calc(0.86 + var(--scroll-progress) * 0.14);
+  transform: translateY(calc(-5px + var(--scroll-progress) * 5px));
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0);
+  transition:
+    opacity 0.32s ease,
+    transform 0.32s ease,
+    padding 0.32s ease,
+    background 0.32s ease,
+    box-shadow 0.32s ease,
+    border-color 0.32s ease,
+    backdrop-filter 0.32s ease;
+}
+
+.topbar::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -30px;
+  height: 30px;
+  pointer-events: none;
+  opacity: calc(var(--scroll-progress) * 0.82);
+  background: var(--topbar-feather);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  transition: opacity 0.32s ease;
+}
+
+.topbar .top-actions {
+  opacity: calc(0.72 + var(--scroll-progress) * 0.28);
+  transform: translateY(calc(-3px + var(--scroll-progress) * 3px));
+  transition: opacity 0.32s ease, transform 0.32s ease;
+}
+
+.topbar .connection {
+  border-color: rgb(255 255 255 / calc(0.08 + var(--scroll-progress) * 0.1));
+  background: rgb(255 255 255 / calc(0.045 + var(--scroll-progress) * 0.075));
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / calc(0.12 + var(--scroll-progress) * 0.12)),
+    0 10px 24px rgb(0 0 0 / calc(var(--scroll-progress) * 0.12));
+}
+
+.topbar.scrolled {
+  --top-blur: 18px;
+  padding-top: 15px;
+  padding-bottom: 15px;
+  border-color: rgba(255, 255, 255, 0.14);
+  background: var(--topbar-bg-scrolled);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
+}
+
+body.light-mode .topbar {
+  background: var(--topbar-bg);
+}
+
+body.light-mode .topbar::after {
+  background: var(--topbar-feather);
+}
+
+body.light-mode .topbar.scrolled {
+  background: var(--topbar-bg-scrolled);
+  box-shadow: 0 14px 34px rgba(50, 89, 103, 0.1);
+}
+
+.floating-nav {
+  position: fixed;
+  top: 112px;
+  right: 28px;
+  z-index: 19;
+  width: max-content;
+  max-width: calc(100vw - 56px);
+  margin: 0;
+  padding: 7px;
+  border: 1px solid rgb(255 255 255 / calc(0.12 + var(--scroll-progress, 0) * 0.1));
+  border-radius: 18px;
+  background: var(--floating-nav-bg);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / calc(0.18 + var(--scroll-progress, 0) * 0.18)),
+    0 18px 44px rgb(0 0 0 / calc(0.08 + var(--scroll-progress, 0) * 0.14));
+  backdrop-filter: blur(calc(10px + var(--scroll-progress, 0) * 8px)) saturate(132%);
+  -webkit-backdrop-filter: blur(calc(10px + var(--scroll-progress, 0) * 8px)) saturate(132%);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  opacity: calc(0.7 + var(--scroll-progress, 0) * 0.3);
+  transform: translateY(calc(-6px + var(--scroll-progress, 0) * 6px));
+  transition: opacity 0.32s ease, transform 0.32s ease, border-color 0.32s ease, box-shadow 0.32s ease, background 0.32s ease;
+}
+
+.floating-nav::-webkit-scrollbar {
+  display: none;
+}
+
+body.light-mode .floating-nav {
+  background: var(--floating-nav-bg);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.72),
+    0 16px 36px rgb(50 89 103 / calc(0.08 + var(--scroll-progress, 0) * 0.08));
+}
+
+.topbar.critical-active {
+  top: 0;
+}
+
+.top-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+main {
+  padding: 104px 28px 32px;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(360px, 1.35fr) repeat(3, minmax(200px, 1fr));
+  gap: 16px;
+}
+
+.metric-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(160px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.content-grid {
+  display: grid;
+  grid-template-columns: minmax(620px, 1.45fr) minmax(360px, 0.9fr);
+  gap: 16px;
+  margin-top: 16px;
+  align-items: start;
+}
+
+.content-column {
+  display: grid;
+  gap: 16px;
+  align-content: start;
+}
+
+.panel {
+  padding: 18px;
+}
+
+.chart-panel {
+  align-self: start;
+}
+
+.panel-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.switch-list,
+.state-grid,
+.quick-grid,
+.cloud-list,
+.events,
+.sensor-settings-grid,
+.threshold-grid,
+.automation-grid,
+.automation-state {
+  display: grid;
+  gap: 10px;
+}
+
+.quick-grid {
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+}
+
+.state-grid {
+  grid-template-columns: repeat(5, minmax(104px, 1fr));
+}
+
+.settings-panel,
+.automation-card {
+  scroll-margin-top: 136px;
+}
+
+.settings-layout {
+  display: grid;
+  grid-template-columns: minmax(620px, 1.35fr) minmax(320px, 0.65fr);
+  gap: 16px;
+  align-items: start;
+}
+
+.sensor-settings-grid {
+  grid-template-columns: repeat(2, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.threshold-grid {
+  grid-template-columns: repeat(2, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.threshold-grid.compact {
+  grid-template-columns: repeat(2, minmax(120px, 1fr));
+}
+
+.automation-grid {
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.automation-head {
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.automation-state {
+  grid-template-columns: repeat(2, minmax(86px, 1fr));
+}
+
+@media (max-width: 1120px) {
+  .hero-grid,
+  .content-grid,
+  .automation-grid,
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .state-grid {
+    grid-template-columns: repeat(2, minmax(120px, 1fr));
+  }
+
+  .events {
+    max-height: 320px;
+  }
+}
+
+@media (max-width: 760px) {
+  .topbar,
+  .top-actions {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .topbar.scrolled {
+    padding-top: 14px;
+    padding-bottom: 14px;
+  }
+
+  .brand-inline {
+    align-items: flex-start;
+  }
+
+  main,
+  .topbar {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .floating-nav {
+    top: 116px;
+    right: 16px;
+    max-width: calc(100vw - 32px);
+    margin: 0;
+  }
+
+  .critical-banner {
+    top: 12px;
+    right: 12px;
+    width: min(420px, calc(100vw - 24px));
+  }
+
+  .metric-grid,
+  .quick-grid,
+  .state-grid,
+  .sensor-settings-grid,
+  .threshold-grid,
+  .events {
+    grid-template-columns: 1fr;
+  }
+
+  .content-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .automation-head {
+    grid-template-columns: 44px 1fr;
+  }
+
+  .automation-head > strong {
+    grid-column: 1 / -1;
+    text-align: left;
+  }
+}
