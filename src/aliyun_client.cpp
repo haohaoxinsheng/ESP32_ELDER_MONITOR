@@ -81,6 +81,14 @@ void addFinite(JsonObject params, const char* key, float value) {
   }
 }
 
+void setFinite(JsonDocument& doc, const char* key, float value) {
+  if (isnan(value)) {
+    doc[key] = nullptr;
+  } else {
+    doc[key] = value;
+  }
+}
+
 String buildAlinkPayload(const TelemetryPayload& payload) {
   JsonDocument doc;
   doc["id"] = String(messageId++);
@@ -124,9 +132,9 @@ String buildMirrorPayload(const TelemetryPayload& payload) {
   JsonDocument doc;
   doc["deviceName"] = CloudConfig::ALIYUN_DEVICE_NAME;
   doc["productKey"] = CloudConfig::ALIYUN_PRODUCT_KEY;
-  doc["temperatureC"] = isnan(payload.temperatureC) ? 0 : payload.temperatureC;
-  doc["humidity"] = isnan(payload.humidity) ? 0 : payload.humidity;
-  doc["lux"] = isnan(payload.lux) ? 0 : payload.lux;
+  setFinite(doc, "temperatureC", payload.temperatureC);
+  setFinite(doc, "humidity", payload.humidity);
+  setFinite(doc, "lux", payload.lux);
   doc["mq2Raw"] = payload.mq2Raw;
   doc["mq135Raw"] = payload.mq135Raw;
   doc["mq7Raw"] = payload.mq7Raw;

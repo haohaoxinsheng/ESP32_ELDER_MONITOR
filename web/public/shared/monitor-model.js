@@ -91,6 +91,17 @@
     return next;
   }
 
+  function optionalNumber(value) {
+    if (value === null || value === undefined || value === '') return null;
+    const number = Number(value);
+    return Number.isFinite(number) ? number : null;
+  }
+
+  function hasNumber(value) {
+    if (value === null || value === undefined || value === '') return false;
+    return Number.isFinite(Number(value));
+  }
+
   function normalizeTelemetry(input, options) {
     const now = options && options.timestamp ? new Date(options.timestamp) : new Date();
     const source = input || {};
@@ -98,9 +109,9 @@
       timestamp: now.toISOString(),
       deviceName: String(source.deviceName || 'esp32-elder-monitor'),
       productKey: String(source.productKey || ''),
-      temperatureC: Number(source.temperatureC ?? 0),
-      humidity: Number(source.humidity ?? 0),
-      lux: Number(source.lux ?? 0),
+      temperatureC: optionalNumber(source.temperatureC),
+      humidity: optionalNumber(source.humidity),
+      lux: optionalNumber(source.lux),
       mq2Raw: Number(source.mq2Raw ?? 0),
       mq135Raw: Number(source.mq135Raw ?? 0),
       mq7Raw: Number(source.mq7Raw ?? 0),
@@ -143,14 +154,15 @@
     const coDanger = th.enableMq7 && Number(next.mq7Raw) >= th.mq7Danger;
     const coWarning = th.enableMq7 && Number(next.mq7Raw) >= th.mq7Warn;
     const tempHumid = th.enableDht22 &&
-      (Number(next.temperatureC) >= th.tempHigh || Number(next.humidity) >= th.humidityHigh);
-    const tempLow = th.enableDht22 && Number(next.temperatureC) <= th.tempLow;
-    const humidityLow = th.enableDht22 && Number(next.humidity) <= th.humidityLow;
+      ((hasNumber(next.temperatureC) && Number(next.temperatureC) >= th.tempHigh) ||
+       (hasNumber(next.humidity) && Number(next.humidity) >= th.humidityHigh));
+    const tempLow = th.enableDht22 && hasNumber(next.temperatureC) && Number(next.temperatureC) <= th.tempLow;
+    const humidityLow = th.enableDht22 && hasNumber(next.humidity) && Number(next.humidity) <= th.humidityLow;
     const pressure = th.enableFsr && Number(next.fsrRaw) >= th.fsrPressure;
     const earthquake = th.enableSw420 && Number(next.vibrationRaw) >= th.earthquakeWarn;
     const warning = airWarning || smokeWarning || coWarning || tempHumid || tempLow || humidityLow || pressure;
 
-    next.dark = th.enableBh1750 && Boolean(next.dark || Number(next.lux) <= th.luxDark);
+    next.dark = th.enableBh1750 && Boolean(next.dark || (hasNumber(next.lux) && Number(next.lux) <= th.luxDark));
     next.bedOccupied = th.enableFsr && Boolean(next.bedOccupied || Number(next.fsrRaw) >= th.bedPresenceRaw);
     next.nightWakeActive = Boolean(next.nightWakeActive || (next.dark && !next.bedOccupied && next.pirMotion));
     next.nightActivity = Boolean(next.nightActivity || (next.dark && next.pirMotion) || next.nightWakeActive);
