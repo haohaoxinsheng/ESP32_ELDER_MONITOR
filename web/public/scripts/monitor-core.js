@@ -10,6 +10,9 @@
     nightRecords: [],
     controls: monitorModel.createDefaultControls(),
     thresholds: monitorModel.createDefaultThresholds(),
+    deviceOnline: false,
+    deviceTimeoutMs: 8000,
+    lastReceivedAt: null,
     mock: {
       enabled: false
     },
@@ -137,14 +140,41 @@
 
   function setConnection(online, text) {
     toggleClass('connDot', 'online', online);
+    toggleClass('connDot', 'offline', !online);
     setText('connText', text || (online ? '实时在线' : '等待数据'));
   }
 
   // 统一把原始遥测归一化，并套用当前阈值和联动配置。
   function deriveTelemetry(data) {
     if (!data) return data;
-    return monitorModel.normalizeAndDeriveTelemetry(data, state.thresholds, state.controls, {
+    const next = monitorModel.normalizeAndDeriveTelemetry(data, state.thresholds, state.controls, {
       timestamp: data.timestamp
+    });
+    next.serverReceivedAt = data.serverReceivedAt || null;
+    return next;
+  }
+
+  function updateDeviceConnection(connection = {}) {
+    state.deviceOnline = Boolean(connection.deviceOnline);
+    state.deviceTimeoutMs = Number(connection.timeoutMs || state.deviceTimeoutMs || 8000);
+    state.lastReceivedAt = connection.lastReceivedAt || state.latest?.serverReceivedAt || null;
+    setConnection(state.deviceOnline, state.deviceOnline ? '实时在线' : state.lastReceivedAt ? '设备下线' : '等待数据');
+  }
+
+  function refreshDeviceConnection() {
+    if (location.protocol === 'file:' || state.mock.enabled || state.demoTimer) {
+      updateDeviceConnection({ deviceOnline: true, lastReceivedAt: new Date().toISOString() });
+      return;
+    }
+    if (!state.lastReceivedAt) {
+      updateDeviceConnection({ deviceOnline: false, lastReceivedAt: null });
+      return;
+    }
+    const elapsed = Date.now() - new Date(state.lastReceivedAt).getTime();
+    updateDeviceConnection({
+      deviceOnline: elapsed <= state.deviceTimeoutMs,
+      timeoutMs: state.deviceTimeoutMs,
+      lastReceivedAt: state.lastReceivedAt
     });
   }
 
@@ -227,6 +257,8 @@
     toggleSelectorClass,
     setConnection,
     deriveTelemetry,
+    updateDeviceConnection,
+    refreshDeviceConnection,
     currentLinkage,
     effectiveLed,
     effectiveFan,

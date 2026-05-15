@@ -1,8 +1,6 @@
 #include "monitor/monitor_state.h"
 
-#include "devices/bh1750_config.h"
 #include "devices/dht22_config.h"
-#include "devices/fsr402_config.h"
 #include "devices/oled_config.h"
 
 namespace Monitor {
@@ -44,7 +42,7 @@ bool nightWakeLightOn = false;
 bool alarmLightOn = false;
 
 bool isBedOccupied(const DeviceControlState& controls) {
-  return controls.enableFsr && data.fsrRaw >= Fsr402Config::BED_OCCUPIED_RAW;
+  return controls.enableFsr && data.fsrRaw >= controls.bedPresenceRaw;
 }
 
 bool isVentilationNeeded() {

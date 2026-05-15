@@ -6,7 +6,7 @@ const MonitorModel = require('./public/shared/monitor-model.js');
 
 loadEnvFile(path.join(__dirname, '.env'));
 
-const port = Number(process.env.PORT || 3000);
+const port = Number(process.env.PORT || 3001);
 const expectedToken = process.env.DEVICE_TOKEN || 'change-me';
 const initialMockEnabled = String(process.env.ENABLE_MOCK || 'false').toLowerCase() === 'true';
 
@@ -17,16 +17,19 @@ const nightRecords = [];
 const maxHistory = 240;
 const maxEvents = 80;
 const maxNightRecords = 60;
+const deviceOfflineTimeoutMs = Number(process.env.DEVICE_OFFLINE_TIMEOUT_MS || 8000);
 const sseClients = new Set();
 const dataDir = path.join(__dirname, 'data');
 const thresholdsFile = path.join(dataDir, 'thresholds.json');
+const controlsFile = path.join(dataDir, 'controls.json');
 const mockFile = path.join(dataDir, 'mock.json');
 let mockEnabled = loadMockState();
 let mockTimer = null;
-const controlState = MonitorModel.createDefaultControls();
+const controlState = loadControls();
 let thresholdState = loadThresholds();
 let lastBedOccupied = null;
 let currentNightWake = null;
+let lastDeviceOnline = false;
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
@@ -48,6 +51,31 @@ function loadThresholds() {
   } catch (error) {
     return MonitorModel.createDefaultThresholds();
   }
+}
+
+function loadControls() {
+  try {
+    if (!fs.existsSync(controlsFile)) return MonitorModel.createDefaultControls();
+    return normalizeControls(JSON.parse(fs.readFileSync(controlsFile, 'utf8')));
+  } catch (error) {
+    return MonitorModel.createDefaultControls();
+  }
+}
+
+function normalizeControls(input) {
+  const next = MonitorModel.createDefaultControls();
+  const source = input || {};
+  for (const key of Object.keys(next)) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
+      next[key] = Boolean(source[key]);
+    }
+  }
+  return next;
+}
+
+function saveControlState() {
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(controlsFile, JSON.stringify(controlState, null, 2));
 }
 
 function loadMockState() {
@@ -83,6 +111,30 @@ function saveThresholds(input) {
 
 function effectiveLinkage(payload = latestTelemetry) {
   return MonitorModel.effectiveLinkage(payload, controlState);
+}
+
+function isDeviceOnline() {
+  if (mockEnabled) return true;
+  if (!latestTelemetry?.serverReceivedAt) return false;
+  return Date.now() - new Date(latestTelemetry.serverReceivedAt).getTime() <= deviceOfflineTimeoutMs;
+}
+
+function connectionStatePayload() {
+  return {
+    deviceOnline: isDeviceOnline(),
+    timeoutMs: deviceOfflineTimeoutMs,
+    lastReceivedAt: latestTelemetry?.serverReceivedAt || null
+  };
+}
+
+function assertDeviceOnline(res) {
+  if (isDeviceOnline()) return true;
+  sendJson(res, 409, {
+    ok: false,
+    error: '设备离线，设置已锁定。请等待设备恢复上报后再修改。',
+    ...connectionStatePayload()
+  });
+  return false;
 }
 
 function addEvent(type, title, detail, timestamp = new Date().toISOString()) {
@@ -151,7 +203,11 @@ function formatDuration(seconds) {
 
 function rememberTelemetry(payload) {
   const previousAlarm = latestTelemetry?.alarmText;
-  latestTelemetry = payload;
+  latestTelemetry = {
+    ...payload,
+    serverReceivedAt: new Date().toISOString()
+  };
+  payload = latestTelemetry;
   history.push(payload);
   while (history.length > maxHistory) history.shift();
   updateNightRecords(payload);
@@ -168,6 +224,7 @@ function rememberTelemetry(payload) {
   broadcast('telemetry', payload);
   broadcast('history', history);
   broadcast('nightRecords', nightRecords);
+  broadcast('connection', connectionStatePayload());
 }
 
 function sendJson(res, statusCode, body) {
@@ -201,6 +258,7 @@ function handleSse(req, res) {
   res.write(`event: controls\ndata: ${JSON.stringify(controlState)}\n\n`);
   res.write(`event: thresholds\ndata: ${JSON.stringify(thresholdState)}\n\n`);
   res.write(`event: mock\ndata: ${JSON.stringify({ enabled: mockEnabled })}\n\n`);
+  res.write(`event: connection\ndata: ${JSON.stringify(connectionStatePayload())}\n\n`);
   req.on('close', () => sseClients.delete(res));
 }
 
@@ -210,6 +268,7 @@ function updateControls(input) {
       controlState[key] = Boolean(input[key]);
     }
   }
+  saveControlState();
   broadcast('controls', controlState);
   events.unshift({
     timestamp: new Date().toISOString(),
@@ -220,6 +279,29 @@ function updateControls(input) {
   while (events.length > maxEvents) events.pop();
   broadcast('events', events);
   return controlState;
+}
+
+function splitControlPayload(input = {}) {
+  const controls = {};
+  const thresholds = {};
+
+  for (const key of Object.keys(controlState)) {
+    if (Object.prototype.hasOwnProperty.call(input, key)) {
+      controls[key] = input[key];
+    }
+  }
+
+  for (const key of Object.keys(MonitorModel.DEFAULT_THRESHOLDS)) {
+    if (Object.prototype.hasOwnProperty.call(input, key)) {
+      thresholds[key] = input[key];
+    }
+  }
+
+  return { controls, thresholds };
+}
+
+function hasPayloadKeys(input) {
+  return Object.keys(input).length > 0;
 }
 
 function buildMockPayload() {
@@ -239,7 +321,7 @@ function setMockEnabled(enabled, options = {}) {
   mockEnabled = Boolean(enabled);
   if (mockEnabled && !mockTimer) {
     tickMock();
-    mockTimer = setInterval(tickMock, 2500);
+    mockTimer = setInterval(tickMock, 1000);
   }
   if (!mockEnabled && mockTimer) {
     clearInterval(mockTimer);
@@ -300,6 +382,8 @@ function healthPayload() {
     latest: latestTelemetry,
     historyCount: history.length,
     controls: controlState,
+    thresholds: thresholdState,
+    ...connectionStatePayload(),
     linkage: effectiveLinkage(),
     mock: { enabled: mockEnabled }
   };
@@ -366,12 +450,18 @@ async function parseJsonBody(req) {
 
 async function handlePostApi(pathname, req, res) {
   if (pathname === '/api/control') {
-    sendJson(res, 200, updateControls(await parseJsonBody(req)));
+    if (!assertDeviceOnline(res)) return true;
+    const input = await parseJsonBody(req);
+    const { controls, thresholds } = splitControlPayload(input);
+    if (hasPayloadKeys(controls)) updateControls(controls);
+    if (hasPayloadKeys(thresholds)) saveThresholds({ ...thresholdState, ...thresholds });
+    sendJson(res, 200, { ...controlState, ...thresholdState });
     return true;
   }
 
   if (pathname === '/api/thresholds') {
-    sendJson(res, 200, saveThresholds(await parseJsonBody(req)));
+    if (!assertDeviceOnline(res)) return true;
+    sendJson(res, 200, saveThresholds({ ...thresholdState, ...await parseJsonBody(req) }));
     return true;
   }
 
@@ -420,6 +510,18 @@ const server = http.createServer(async (req, res) => {
 if (mockEnabled) {
   setMockEnabled(true, { addEvent: false });
 }
+
+setInterval(() => {
+  const online = isDeviceOnline();
+  if (online === lastDeviceOnline) return;
+  lastDeviceOnline = online;
+  broadcast('connection', connectionStatePayload());
+  addEvent(
+    online ? 'status' : 'alarm',
+    online ? 'DEVICE ONLINE' : 'DEVICE OFFLINE',
+    online ? '设备已恢复实时上报' : '超过离线阈值未收到设备数据，设置已锁定'
+  );
+}, 1000);
 
 server.listen(port, '0.0.0.0', () => {
   console.log(`Elder monitor dashboard: http://localhost:${port}`);

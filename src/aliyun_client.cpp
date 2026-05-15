@@ -89,10 +89,72 @@ void setFinite(JsonDocument& doc, const char* key, float value) {
   }
 }
 
+void setThreshold(JsonObject doc, const char* key, uint16_t value) {
+  doc[key] = value;
+}
+
+void setThreshold(JsonObject doc, const char* key, float value) {
+  doc[key] = value;
+}
+
+uint16_t readRawThreshold(const JsonDocument& doc, const char* key, uint16_t current) {
+  if (!doc[key].is<uint16_t>() && !doc[key].is<int>() && !doc[key].is<float>()) {
+    return current;
+  }
+  const int value = doc[key].as<int>();
+  return static_cast<uint16_t>(constrain(value, 0, 4095));
+}
+
+float readFloatThreshold(const JsonDocument& doc, const char* key, float current, float minValue, float maxValue) {
+  if (!doc[key].is<float>() && !doc[key].is<int>()) {
+    return current;
+  }
+  const float value = doc[key].as<float>();
+  if (isnan(value)) {
+    return current;
+  }
+  return constrain(value, minValue, maxValue);
+}
+
+bool readBoolControl(const JsonDocument& doc, const char* key, bool current) {
+  if (!doc[key].is<bool>()) {
+    return current;
+  }
+  return doc[key].as<bool>();
+}
+
+void normalizeControlThresholds() {
+  if (deviceControl.mq135Warn > deviceControl.mq135Danger) {
+    const uint16_t swap = deviceControl.mq135Warn;
+    deviceControl.mq135Warn = deviceControl.mq135Danger;
+    deviceControl.mq135Danger = swap;
+  }
+  if (deviceControl.mq2Warn > deviceControl.mq2Danger) {
+    const uint16_t swap = deviceControl.mq2Warn;
+    deviceControl.mq2Warn = deviceControl.mq2Danger;
+    deviceControl.mq2Danger = swap;
+  }
+  if (deviceControl.mq7Warn > deviceControl.mq7Danger) {
+    const uint16_t swap = deviceControl.mq7Warn;
+    deviceControl.mq7Warn = deviceControl.mq7Danger;
+    deviceControl.mq7Danger = swap;
+  }
+  if (deviceControl.tempLow > deviceControl.tempHigh) {
+    const float swap = deviceControl.tempLow;
+    deviceControl.tempLow = deviceControl.tempHigh;
+    deviceControl.tempHigh = swap;
+  }
+  if (deviceControl.humidityLow > deviceControl.humidityHigh) {
+    const float swap = deviceControl.humidityLow;
+    deviceControl.humidityLow = deviceControl.humidityHigh;
+    deviceControl.humidityHigh = swap;
+  }
+}
+
 String buildAlinkPayload(const TelemetryPayload& payload) {
   JsonDocument doc;
   doc["id"] = String(messageId++);
-  doc["version"] = "1.0";
+  doc["version"] = "1.0.5";
   doc["method"] = "thing.event.property.post";
 
   JsonObject params = doc["params"].to<JsonObject>();
@@ -160,6 +222,33 @@ String buildMirrorPayload(const TelemetryPayload& payload) {
   doc["alarmText"] = payload.alarmText;
   doc["uptimeMs"] = millis();
 
+  JsonObject controls = doc["controls"].to<JsonObject>();
+  controls["enableDht22"] = deviceControl.enableDht22;
+  controls["enableBh1750"] = deviceControl.enableBh1750;
+  controls["enableMq135"] = deviceControl.enableMq135;
+  controls["enableMq2"] = deviceControl.enableMq2;
+  controls["enableMq7"] = deviceControl.enableMq7;
+  controls["enableFsr"] = deviceControl.enableFsr;
+  controls["enablePir"] = deviceControl.enablePir;
+  controls["enableSw420"] = deviceControl.enableSw420;
+  controls["enableSos"] = deviceControl.enableSos;
+
+  JsonObject thresholds = doc["thresholds"].to<JsonObject>();
+  setThreshold(thresholds, "mq135Warn", deviceControl.mq135Warn);
+  setThreshold(thresholds, "mq135Danger", deviceControl.mq135Danger);
+  setThreshold(thresholds, "mq2Warn", deviceControl.mq2Warn);
+  setThreshold(thresholds, "mq2Danger", deviceControl.mq2Danger);
+  setThreshold(thresholds, "mq7Warn", deviceControl.mq7Warn);
+  setThreshold(thresholds, "mq7Danger", deviceControl.mq7Danger);
+  setThreshold(thresholds, "earthquakeWarn", deviceControl.earthquakeWarn);
+  setThreshold(thresholds, "tempHigh", deviceControl.tempHigh);
+  setThreshold(thresholds, "tempLow", deviceControl.tempLow);
+  setThreshold(thresholds, "humidityHigh", deviceControl.humidityHigh);
+  setThreshold(thresholds, "humidityLow", deviceControl.humidityLow);
+  setThreshold(thresholds, "luxDark", deviceControl.luxDark);
+  setThreshold(thresholds, "bedPresenceRaw", deviceControl.bedPresenceRaw);
+  setThreshold(thresholds, "fsrPressure", deviceControl.fsrPressure);
+
   String output;
   serializeJson(doc, output);
   return output;
@@ -224,6 +313,7 @@ void postMirror(const String& payload) {
 
   HTTPClient http;
   http.begin(CloudConfig::WEB_MIRROR_URL);
+  http.setTimeout(CloudConfig::WEB_HTTP_TIMEOUT_MS);
   http.addHeader("Content-Type", "application/json");
   http.addHeader("x-device-token", CloudConfig::WEB_MIRROR_TOKEN);
   const int code = http.POST(payload);
@@ -233,25 +323,40 @@ void postMirror(const String& payload) {
 }
 
 void applyControlJson(const JsonDocument& doc) {
-  deviceControl.enableDht22 = doc["enableDht22"] | deviceControl.enableDht22;
-  deviceControl.enableBh1750 = doc["enableBh1750"] | deviceControl.enableBh1750;
-  deviceControl.enableMq135 = doc["enableMq135"] | deviceControl.enableMq135;
-  deviceControl.enableMq2 = doc["enableMq2"] | deviceControl.enableMq2;
-  deviceControl.enableMq7 = doc["enableMq7"] | deviceControl.enableMq7;
-  deviceControl.enableFsr = doc["enableFsr"] | deviceControl.enableFsr;
-  deviceControl.enablePir = doc["enablePir"] | deviceControl.enablePir;
-  deviceControl.enableSw420 = doc["enableSw420"] | deviceControl.enableSw420;
-  deviceControl.enableSos = doc["enableSos"] | deviceControl.enableSos;
-  deviceControl.darkLight = doc["darkLight"] | deviceControl.darkLight;
-  deviceControl.nightLight = doc["nightLight"] | deviceControl.nightLight;
-  deviceControl.nightWakeMonitor = doc["nightWakeMonitor"] | deviceControl.nightWakeMonitor;
-  deviceControl.nightWakeLight = doc["nightWakeLight"] | deviceControl.nightWakeLight;
-  deviceControl.curtainAuto = doc["curtainAuto"] | deviceControl.curtainAuto;
-  deviceControl.alarmLight = doc["alarmLight"] | deviceControl.alarmLight;
-  deviceControl.fanVentilation = doc["fanVentilation"] | deviceControl.fanVentilation;
-  deviceControl.buzzerAlarm = doc["buzzerAlarm"] | deviceControl.buzzerAlarm;
-  deviceControl.sosServo = doc["sosServo"] | deviceControl.sosServo;
-  deviceControl.noMotionWarning = doc["noMotionWarning"] | deviceControl.noMotionWarning;
+  deviceControl.enableDht22 = readBoolControl(doc, "enableDht22", deviceControl.enableDht22);
+  deviceControl.enableBh1750 = readBoolControl(doc, "enableBh1750", deviceControl.enableBh1750);
+  deviceControl.enableMq135 = readBoolControl(doc, "enableMq135", deviceControl.enableMq135);
+  deviceControl.enableMq2 = readBoolControl(doc, "enableMq2", deviceControl.enableMq2);
+  deviceControl.enableMq7 = readBoolControl(doc, "enableMq7", deviceControl.enableMq7);
+  deviceControl.enableFsr = readBoolControl(doc, "enableFsr", deviceControl.enableFsr);
+  deviceControl.enablePir = readBoolControl(doc, "enablePir", deviceControl.enablePir);
+  deviceControl.enableSw420 = readBoolControl(doc, "enableSw420", deviceControl.enableSw420);
+  deviceControl.enableSos = readBoolControl(doc, "enableSos", deviceControl.enableSos);
+  deviceControl.darkLight = readBoolControl(doc, "darkLight", deviceControl.darkLight);
+  deviceControl.nightLight = readBoolControl(doc, "nightLight", deviceControl.nightLight);
+  deviceControl.nightWakeMonitor = readBoolControl(doc, "nightWakeMonitor", deviceControl.nightWakeMonitor);
+  deviceControl.nightWakeLight = readBoolControl(doc, "nightWakeLight", deviceControl.nightWakeLight);
+  deviceControl.curtainAuto = readBoolControl(doc, "curtainAuto", deviceControl.curtainAuto);
+  deviceControl.alarmLight = readBoolControl(doc, "alarmLight", deviceControl.alarmLight);
+  deviceControl.fanVentilation = readBoolControl(doc, "fanVentilation", deviceControl.fanVentilation);
+  deviceControl.buzzerAlarm = readBoolControl(doc, "buzzerAlarm", deviceControl.buzzerAlarm);
+  deviceControl.sosServo = readBoolControl(doc, "sosServo", deviceControl.sosServo);
+  deviceControl.noMotionWarning = readBoolControl(doc, "noMotionWarning", deviceControl.noMotionWarning);
+  deviceControl.mq135Warn = readRawThreshold(doc, "mq135Warn", deviceControl.mq135Warn);
+  deviceControl.mq135Danger = readRawThreshold(doc, "mq135Danger", deviceControl.mq135Danger);
+  deviceControl.mq2Warn = readRawThreshold(doc, "mq2Warn", deviceControl.mq2Warn);
+  deviceControl.mq2Danger = readRawThreshold(doc, "mq2Danger", deviceControl.mq2Danger);
+  deviceControl.mq7Warn = readRawThreshold(doc, "mq7Warn", deviceControl.mq7Warn);
+  deviceControl.mq7Danger = readRawThreshold(doc, "mq7Danger", deviceControl.mq7Danger);
+  deviceControl.earthquakeWarn = readRawThreshold(doc, "earthquakeWarn", deviceControl.earthquakeWarn);
+  deviceControl.tempHigh = readFloatThreshold(doc, "tempHigh", deviceControl.tempHigh, -20.0F, 80.0F);
+  deviceControl.tempLow = readFloatThreshold(doc, "tempLow", deviceControl.tempLow, -20.0F, 80.0F);
+  deviceControl.humidityHigh = readFloatThreshold(doc, "humidityHigh", deviceControl.humidityHigh, 0.0F, 100.0F);
+  deviceControl.humidityLow = readFloatThreshold(doc, "humidityLow", deviceControl.humidityLow, 0.0F, 100.0F);
+  deviceControl.luxDark = readFloatThreshold(doc, "luxDark", deviceControl.luxDark, 0.0F, 2000.0F);
+  deviceControl.bedPresenceRaw = readRawThreshold(doc, "bedPresenceRaw", deviceControl.bedPresenceRaw);
+  deviceControl.fsrPressure = readRawThreshold(doc, "fsrPressure", deviceControl.fsrPressure);
+  normalizeControlThresholds();
   deviceControl.updatedAtMs = millis();
   deviceControl.valid = true;
 }
@@ -316,6 +421,7 @@ bool pullControlState() {
 
   HTTPClient http;
   http.begin(CloudConfig::WEB_CONTROL_URL);
+  http.setTimeout(CloudConfig::WEB_HTTP_TIMEOUT_MS);
   const int code = http.GET();
   if (code != HTTP_CODE_OK) {
     Serial.print(F("Control pull HTTP="));

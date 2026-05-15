@@ -9,6 +9,8 @@
     setConnection,
     criticalTypeOf,
     deriveTelemetry,
+    updateDeviceConnection,
+    refreshDeviceConnection,
     updateTopbarGlass,
     bindLiquidGlassInteraction,
     renderLatest,
@@ -36,6 +38,49 @@
     setText('settingsStatus', text);
   }
 
+  function flashSettingsSaved() {
+    const badge = $('settingsStatus');
+    if (!badge) return;
+    badge.classList.remove('muted');
+    badge.classList.add('success');
+    badge.textContent = '已保存';
+    clearTimeout(badge._saveTimer);
+    badge._saveTimer = setTimeout(() => {
+      badge.classList.remove('success');
+      badge.classList.add('muted');
+      badge.textContent = '已保存';
+    }, 1800);
+  }
+
+  function refreshSettingsLock() {
+    renderControls();
+    renderThresholds();
+  }
+
+  async function readJsonResponse(response, actionText) {
+    let body = null;
+    try {
+      body = await response.json();
+    } catch (error) {
+      body = null;
+    }
+    if (!response.ok) {
+      throw new Error(body?.error || `${actionText}失败：HTTP ${response.status}`);
+    }
+    return body || {};
+  }
+
+  function normalizeControlsResponse(saved) {
+    const source = saved?.controls || saved || {};
+    const next = monitorModel.createDefaultControls();
+    Object.keys(next).forEach((key) => {
+      if (Object.prototype.hasOwnProperty.call(source, key)) {
+        next[key] = Boolean(source[key]);
+      }
+    });
+    return next;
+  }
+
   // 本地追加一条事件，供 file 协议演示模式复用。
   function addLocalEvent(title, detail, type = 'status') {
     state.events.unshift({
@@ -49,7 +94,14 @@
   }
 
   // 保存联动开关；本地演示写 localStorage，在线模式提交到服务端。
-  async function saveControls() {
+  async function saveControls(previousControls = { ...state.controls }) {
+    if (!state.deviceOnline && location.protocol !== 'file:') {
+      state.controls = previousControls;
+      renderControls();
+      addLocalEvent('CONTROL LOCKED', '设备离线，设置已锁定，等待恢复上报后再修改。', 'alarm');
+      return;
+    }
+
     if (location.protocol === 'file:') {
       localStorage.setItem('elderMonitorControls', JSON.stringify(state.controls));
       addLocalEvent('CONTROL UPDATED', '本地演示模式下联动开关已更新');
@@ -57,17 +109,34 @@
       return;
     }
 
-    const response = await fetch('/api/control', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(state.controls)
-    });
-    state.controls = await response.json();
-    renderControls();
+    try {
+      const response = await fetch('/api/control', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state.controls)
+      });
+      const saved = await readJsonResponse(response, '保存联动开关');
+      state.controls = normalizeControlsResponse(saved);
+      addLocalEvent('CONTROL UPDATED', '网页端联动开关已保存到服务端');
+      flashSettingsSaved();
+      renderControls();
+    } catch (error) {
+      state.controls = previousControls;
+      addLocalEvent('CONTROL FAILED', error.message || '联动开关保存失败，请检查服务端连接', 'alarm');
+      renderControls();
+    }
   }
 
   // 保存阈值配置，并在本地演示与在线模式之间复用同一入口。
   async function saveThresholds(nextThresholds) {
+    if (!state.deviceOnline && location.protocol !== 'file:') {
+      setSettingsStatus('设备离线，设置锁定');
+      renderThresholds();
+      addLocalEvent('CONTROL LOCKED', '设备离线，阈值设置未保存。', 'alarm');
+      return;
+    }
+
+    setSettingsStatus('保存中...');
     state.thresholds = monitorModel.normalizeThresholds(nextThresholds);
     if (location.protocol === 'file:') {
       localStorage.setItem('elderMonitorThresholds', JSON.stringify(state.thresholds));
@@ -77,14 +146,20 @@
       return;
     }
 
-    const response = await fetch('/api/thresholds', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(state.thresholds)
-    });
-    state.thresholds = await response.json();
-    setSettingsStatus('已保存');
-    renderThresholds();
+    try {
+      const response = await fetch('/api/thresholds', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state.thresholds)
+      });
+      const saved = await readJsonResponse(response, '保存阈值');
+      state.thresholds = monitorModel.normalizeThresholds(saved.thresholds || saved);
+      flashSettingsSaved();
+      renderThresholds();
+    } catch (error) {
+      setSettingsStatus(error.message || '保存失败');
+      renderThresholds();
+    }
   }
 
   function resetThresholds() {
@@ -94,6 +169,11 @@
   // SSE 与本地演示都会走这里，保证状态进入渲染前先完成统一推导。
   function handleTelemetry(data) {
     state.latest = deriveTelemetry(data);
+    updateDeviceConnection({
+      deviceOnline: true,
+      timeoutMs: state.deviceTimeoutMs,
+      lastReceivedAt: state.latest?.serverReceivedAt || new Date().toISOString()
+    });
     renderLatest(state.latest);
   }
 
@@ -119,6 +199,7 @@
 
   function handleMock(mock) {
     state.mock = { enabled: Boolean(mock?.enabled) };
+    if (state.mock.enabled) updateDeviceConnection({ deviceOnline: true, lastReceivedAt: new Date().toISOString() });
     renderDemoButton();
     if (!state.mock.enabled && !state.latest) setConnection(false, '等待数据');
   }
@@ -126,6 +207,12 @@
   function handleThresholds(thresholds) {
     state.thresholds = monitorModel.normalizeThresholds(thresholds || {});
     renderThresholds();
+  }
+
+  function handleConnection(connection) {
+    updateDeviceConnection(connection || {});
+    refreshSettingsLock();
+    renderLatest(state.latest);
   }
 
   async function toggleServerDemo() {
@@ -184,7 +271,7 @@
     if (state.demoTimer) return;
     setConnection(true, '本地演示');
     tickDemo();
-    state.demoTimer = setInterval(tickDemo, 2500);
+    state.demoTimer = setInterval(tickDemo, 1000);
     renderDemoButton();
   }
 
@@ -227,6 +314,7 @@
     stream.addEventListener('controls', (event) => handleControls(JSON.parse(event.data)));
     stream.addEventListener('thresholds', (event) => handleThresholds(JSON.parse(event.data)));
     stream.addEventListener('mock', (event) => handleMock(JSON.parse(event.data)));
+    stream.addEventListener('connection', (event) => handleConnection(JSON.parse(event.data)));
     stream.addEventListener('error', () => setConnection(false, '连接中断'));
   }
 
@@ -234,8 +322,9 @@
   function bindControls() {
     document.querySelectorAll('[data-control]').forEach((input) => {
       input.addEventListener('change', async () => {
+        const previousControls = { ...state.controls };
         state.controls[input.dataset.control] = input.checked;
-        await saveControls();
+        await saveControls(previousControls);
       });
     });
 
@@ -315,6 +404,12 @@
     bindLiquidGlassInteraction();
     updateTopbarGlass();
     connectStream();
+    refreshDeviceConnection();
+    setInterval(() => {
+      refreshDeviceConnection();
+      refreshSettingsLock();
+      renderLatest(state.latest);
+    }, 1000);
     window.addEventListener('scroll', updateTopbarGlass, { passive: true });
     window.addEventListener('resize', () => {
       if ($('trendChart')) drawTrend();
@@ -324,6 +419,7 @@
   Object.assign(App, {
     readThresholdForm,
     setSettingsStatus,
+    flashSettingsSaved,
     addLocalEvent,
     saveControls,
     saveThresholds,
@@ -335,6 +431,7 @@
     handleControls,
     handleMock,
     handleThresholds,
+    handleConnection,
     toggleServerDemo,
     updateLocalNightRecords,
     tickDemo,

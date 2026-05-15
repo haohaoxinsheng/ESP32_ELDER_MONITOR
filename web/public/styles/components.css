@@ -147,6 +147,10 @@
   background: var(--good);
 }
 
+.dot.offline {
+  background: var(--danger);
+}
+
 .alert-strip {
   min-height: 58px;
   margin-bottom: 16px;
@@ -191,6 +195,11 @@
   border-color: rgba(239, 68, 68, 0.75);
   background: rgba(239, 68, 68, 0.16);
   animation: flash 1.1s infinite alternate;
+}
+
+.alert-strip.offline {
+  border-color: rgba(246, 189, 96, 0.78);
+  background: rgba(246, 189, 96, 0.14);
 }
 
 @keyframes flash {
@@ -322,6 +331,22 @@
   position: relative;
   cursor: pointer;
   flex: 0 0 auto;
+}
+
+.switch-row input:disabled,
+.sensor-setting-head input:disabled,
+.threshold-grid input:disabled,
+.threshold-grid input[type="checkbox"]:disabled,
+.ghost-button:disabled,
+.primary-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.48;
+}
+
+.switch-row:has(input:disabled),
+.sensor-setting:has(input:disabled),
+.threshold-grid label:has(input:disabled) {
+  opacity: 0.68;
 }
 
 .switch-row input {
@@ -489,6 +514,12 @@
 
 .tag.muted {
   color: var(--muted);
+}
+
+.tag.success {
+  background: rgba(61, 220, 151, 0.16);
+  border-color: rgba(61, 220, 151, 0.36);
+  color: var(--good);
 }
 
 .threshold-grid input {

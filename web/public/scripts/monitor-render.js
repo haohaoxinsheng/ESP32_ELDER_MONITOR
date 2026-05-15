@@ -23,6 +23,7 @@
     isCriticalTelemetry,
     criticalTypeOf,
     isCriticalMuted,
+    refreshDeviceConnection,
     formatUptime,
     formatDuration
   } = App;
@@ -31,9 +32,11 @@
   function renderStatusClasses(data, activeCritical, muted) {
     toggleClass('statusPanel', 'warn', Boolean(data.alarmAny || data.sos));
     toggleClass('statusPanel', 'critical', activeCritical);
+    toggleClass('statusPanel', 'offline', !state.deviceOnline && Boolean(data));
     toggleSelectorClass('.topbar', 'critical-active', activeCritical);
     toggleClass('alertStrip', 'warning', Boolean((data.alarmAny || muted) && !activeCritical));
     toggleClass('alertStrip', 'danger', activeCritical);
+    toggleClass('alertStrip', 'offline', !state.deviceOnline && Boolean(data));
   }
 
   // 渲染总览页顶部关键读数，保证首页一屏就能看懂当前状态。
@@ -81,6 +84,13 @@
   }
 
   function renderAlertSummary(data, critical, muted = false) {
+    if (!state.deviceOnline) {
+      setText('alertIcon', '!');
+      setText('alertHeadline', '设备下线');
+      setText('alertMessage', '已超过离线阈值未收到设备数据，页面保留最后一次有效读数，设置已锁定。');
+      return;
+    }
+
     if (muted) {
       setText('alertIcon', '!');
       setText('alertHeadline', '告警已确认');
@@ -102,7 +112,9 @@
     if (data.alarmAny) {
       setText('alertIcon', '!');
       setText('alertHeadline', alarmLabel(data.alarmText) || '环境异常');
-      setText('alertMessage', '系统检测到异常状态，已记录事件并执行本地联动。');
+      if (data.alarmText === 'NO MOTION') setText('alertMessage', '长时间无活动，已记录提醒，请关注老人状态。');
+      else if (data.alarmText === 'VIBRATION') setText('alertMessage', '检测到振动异常，已记录事件并联动提醒。');
+      else setText('alertMessage', '系统检测到异常状态，已记录事件并执行本地联动。');
       return;
     }
 
@@ -122,11 +134,20 @@
   function renderTopBanner(data, critical, muted = false) {
     const banner = $('criticalBanner');
     if (!banner) return;
-    const shouldShow = critical || muted;
+    const offline = !state.deviceOnline && Boolean(data);
+    const shouldShow = offline || critical || muted || Boolean(data.alarmAny || data.nightActivity);
     banner.hidden = false;
     banner.classList.toggle('danger', critical);
-    banner.classList.toggle('safe', !critical);
+    banner.classList.toggle('offline', offline);
+    banner.classList.toggle('warning', !critical && !offline && Boolean(data.alarmAny || data.nightActivity || muted));
+    banner.classList.toggle('safe', !critical && !offline && !data.alarmAny && !data.nightActivity && !muted);
     banner.classList.toggle('show', shouldShow);
+    if (offline) {
+      setText('criticalIcon', '!');
+      setText('criticalTitle', '设备下线');
+      setText('criticalText', '当前显示为最后一次有效数据。网络恢复并收到新数据前，阈值和联动设置已锁定。');
+      return;
+    }
     if (critical) {
       setText('criticalIcon', data.alarmText === 'EARTHQUAKE' ? '震' : data.dangerLevel === 'co_critical' ? 'CO' : data.fallDetected ? '↯' : '!');
       setText('criticalTitle', alarmLabel(data.alarmText) || '危险报警');
@@ -138,14 +159,17 @@
       return;
     }
 
-    if (!muted) {
-      banner.hidden = true;
+    if (data.alarmAny || data.nightActivity || muted) {
+      setText('criticalIcon', data.alarmText === 'NO MOTION' ? '时' : data.alarmText === 'VIBRATION' ? '震' : '!');
+      setText('criticalTitle', muted ? '告警已确认' : alarmLabel(data.alarmText) || '异常提醒');
+      if (data.alarmText === 'NO MOTION') setText('criticalText', '长时间无活动已触发提醒，请检查现场。');
+      else if (data.alarmText === 'VIBRATION') setText('criticalText', '检测到振动异常，请留意设备或现场环境。');
+      else if (data.nightActivity) setText('criticalText', '暗环境检测到人体活动，已联动开灯。');
+      else setText('criticalText', '系统检测到异常状态，请查看对应监测卡片。');
       return;
     }
 
-    setText('criticalIcon', muted ? '!' : '✓');
-    setText('criticalTitle', muted ? '告警已确认' : '系统安全');
-    setText('criticalText', muted ? `${alarmLabel(data.alarmText)}仍在持续监测。` : '暂无危险报警，设备正在持续监测。');
+    banner.hidden = true;
   }
 
   function renderOperationalSummary(data) {
@@ -163,7 +187,7 @@
     setText('sampleCount', state.history.length);
     setText('pushRequired', data.pushRequired ? '需要' : '不需要');
     setText('dangerLevel', dangerLabel(data.dangerLevel));
-    setText('cloudStatus', '已接收');
+    setText('cloudStatus', state.deviceOnline ? '实时在线' : '设备下线');
     setText('cloudProduct', data.productKey || '--');
     setText('cloudDeviceName', data.deviceName || '--');
     setText('lastSeen', new Date(data.timestamp).toLocaleTimeString());
@@ -325,6 +349,7 @@
   function renderControls() {
     document.querySelectorAll('[data-control]').forEach((input) => {
       input.checked = Boolean(state.controls[input.dataset.control]);
+      input.disabled = !state.deviceOnline && location.protocol !== 'file:';
     });
     renderDemoButton();
     renderLatest(state.latest);
@@ -334,10 +359,18 @@
   function renderThresholds() {
     document.querySelectorAll('[data-threshold]').forEach((input) => {
       input.value = state.thresholds[input.dataset.threshold] ?? '';
+      input.disabled = !state.deviceOnline && location.protocol !== 'file:';
     });
     document.querySelectorAll('[data-sensor]').forEach((input) => {
       input.checked = Boolean(state.thresholds[input.dataset.sensor]);
+      input.disabled = !state.deviceOnline && location.protocol !== 'file:';
     });
+    document.querySelectorAll('#thresholdForm button').forEach((button) => {
+      button.disabled = !state.deviceOnline && location.protocol !== 'file:';
+    });
+    if (!state.deviceOnline && location.protocol !== 'file:') {
+      setText('settingsStatus', '设备离线，设置锁定');
+    }
     renderLatest(state.latest);
   }
 
@@ -360,7 +393,7 @@
       ['automationUpdatedAt', data?.timestamp ? new Date(data.timestamp).toLocaleString() : '--']
     ];
     rows.forEach(([id, value]) => setText(id, value));
-    setText('automationSummary', online ? `当前危险等级：${dangerLabel(data.dangerLevel)}，主告警：${alarmLabel(data.alarmText)}` : '等待设备数据或启动演示数据。');
+    setText('automationSummary', online ? `当前危险等级：${dangerLabel(data.dangerLevel)}，主告警：${alarmLabel(data.alarmText)}${state.deviceOnline ? '' : '，设备已下线'}` : '等待设备数据或启动演示数据。');
     document.querySelectorAll('[data-status-key]').forEach((node) => {
       const active = Boolean(status[node.dataset.statusKey]);
       node.classList.toggle('active', active);
@@ -371,11 +404,11 @@
   // 总入口：把一帧遥测数据分发到各个页面区域。
   function renderLatest(data) {
     if (!data) {
-      setConnection(false);
+      refreshDeviceConnection();
       return;
     }
 
-    setConnection(true);
+    refreshDeviceConnection();
     const critical = isCriticalTelemetry(data);
     const criticalType = criticalTypeOf(data);
     const muted = isCriticalMuted(data, criticalType);

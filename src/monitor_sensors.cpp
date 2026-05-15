@@ -43,7 +43,7 @@ void readSensors() {
 void updateActivityState() {
   const uint32_t now = millis();
   const DeviceControlState& controls = AliyunClient::controlState();
-  activityState.dark = controls.enableBh1750 && !isnan(data.lux) && data.lux <= Bh1750Config::NIGHT_ACTIVITY_LUX;
+  activityState.dark = controls.enableBh1750 && !isnan(data.lux) && data.lux <= controls.luxDark;
 
   if (controls.enablePir && activityState.dark && data.pirMotion) {
     lastNightActivityMs = now;
@@ -56,25 +56,25 @@ void updateActivityState() {
 }
 
 void updateGasAlarms(const DeviceControlState& controls) {
-  alarmState.airWarning = controls.enableMq135 && data.mq135Raw >= Mq135Config::WARN_RAW;
-  alarmState.airDanger = controls.enableMq135 && data.mq135Raw >= Mq135Config::DANGER_RAW;
-  alarmState.smokeWarning = controls.enableMq2 && data.mq2Raw >= Mq2Config::WARN_RAW;
-  alarmState.smokeDanger = controls.enableMq2 && data.mq2Raw >= Mq2Config::DANGER_RAW;
-  alarmState.coWarning = controls.enableMq7 && data.mq7Raw >= Mq7Config::WARN_RAW;
-  alarmState.coDanger = controls.enableMq7 && data.mq7Raw >= Mq7Config::DANGER_RAW;
+  alarmState.airWarning = controls.enableMq135 && data.mq135Raw >= controls.mq135Warn;
+  alarmState.airDanger = controls.enableMq135 && data.mq135Raw >= controls.mq135Danger;
+  alarmState.smokeWarning = controls.enableMq2 && data.mq2Raw >= controls.mq2Warn;
+  alarmState.smokeDanger = controls.enableMq2 && data.mq2Raw >= controls.mq2Danger;
+  alarmState.coWarning = controls.enableMq7 && data.mq7Raw >= controls.mq7Warn;
+  alarmState.coDanger = controls.enableMq7 && data.mq7Raw >= controls.mq7Danger;
 }
 
 void updateComfortAlarms(const DeviceControlState& controls) {
   alarmState.tempHumidity =
       controls.enableDht22 &&
-      ((!isnan(data.temperatureC) && data.temperatureC >= Dht22Config::TEMP_HIGH_C) ||
-       (!isnan(data.humidity) && data.humidity >= Dht22Config::HUMIDITY_HIGH_PERCENT));
-  alarmState.tempLow = controls.enableDht22 && !isnan(data.temperatureC) && data.temperatureC <= Dht22Config::TEMP_LOW_C;
-  alarmState.humidityLow = controls.enableDht22 && !isnan(data.humidity) && data.humidity <= Dht22Config::HUMIDITY_LOW_PERCENT;
+      ((!isnan(data.temperatureC) && data.temperatureC >= controls.tempHigh) ||
+       (!isnan(data.humidity) && data.humidity >= controls.humidityHigh));
+  alarmState.tempLow = controls.enableDht22 && !isnan(data.temperatureC) && data.temperatureC <= controls.tempLow;
+  alarmState.humidityLow = controls.enableDht22 && !isnan(data.humidity) && data.humidity <= controls.humidityLow;
 }
 
 void updateActivityAlarms(const DeviceControlState& controls, uint32_t now) {
-  alarmState.pressure = controls.enableFsr && data.fsrRaw >= Fsr402Config::PRESS_WARN_RAW;
+  alarmState.pressure = controls.enableFsr && data.fsrRaw >= controls.fsrPressure;
   alarmState.vibration = controls.enableSw420 && data.vibration;
   alarmState.noMotion = controls.noMotionWarning && (now - lastMotionMs) >= Timing::NO_MOTION_WARNING_MS;
   alarmState.fallDetected =
