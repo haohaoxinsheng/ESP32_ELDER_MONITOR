@@ -16,8 +16,8 @@ constexpr const char* ALIYUN_DEVICE_NAME = "YOUR_DEVICE_NAME";
 constexpr const char* ALIYUN_DEVICE_SECRET = "YOUR_DEVICE_SECRET";
 
 // 示例：http://192.168.1.10:3001/api/telemetry
-constexpr const char* WEB_MIRROR_URL = "http://47.95.117.145/api/telemetry";
-constexpr const char* WEB_CONTROL_URL = "http://47.95.117.145/api/control";
+constexpr const char* WEB_MIRROR_URL = "http://59.110.166.166/api/telemetry";
+constexpr const char* WEB_CONTROL_URL = "http://59.110.166.166/api/control";
 constexpr const char* WEB_MIRROR_TOKEN = "elder-monitor-token";
 
 constexpr uint32_t WIFI_CONNECT_TIMEOUT_MS = 15000;

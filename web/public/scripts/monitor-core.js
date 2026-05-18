@@ -16,9 +16,15 @@
     mock: {
       enabled: false
     },
+    thresholdFormDirty: false,
+    thresholdFormSaving: false,
+    thresholdDraft: {},
     demoTimer: null,
     criticalMuteUntil: 0,
-    criticalMutedType: ''
+    criticalMutedType: '',
+    criticalHoldUntil: 0,
+    criticalHoldData: null,
+    criticalHoldType: ''
   };
 
   const $ = (id) => document.getElementById(id);

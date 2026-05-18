@@ -14,6 +14,7 @@ constexpr bool LED_LIGHT_ACTIVE_HIGH = false;
 constexpr uint16_t PASSIVE_BUZZER_FREQUENCY_HZ = 2000;
 
 constexpr uint8_t SERVO_NORMAL_ANGLE = 10;
+constexpr uint8_t SERVO_CURTAIN_OPEN_ANGLE = 180;
 constexpr uint8_t SERVO_CURTAIN_CLOSED_ANGLE = 70;
 constexpr uint8_t SERVO_SOS_ANGLE = 90;
 }  // namespace ActuatorConfig

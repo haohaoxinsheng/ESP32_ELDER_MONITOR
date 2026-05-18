@@ -24,6 +24,10 @@
 
   // 读取设置页表单，并归一化成可直接保存的阈值对象。
   function readThresholdForm() {
+    return { ...state.thresholdDraft };
+  }
+
+  function readFullThresholdForm() {
     const values = {};
     document.querySelectorAll('[data-threshold]').forEach((input) => {
       values[input.dataset.threshold] = input.value;
@@ -32,6 +36,19 @@
       values[input.dataset.sensor] = input.checked;
     });
     return monitorModel.normalizeThresholds(values);
+  }
+
+  function thresholdInputValue(input) {
+    if (input.matches('[data-sensor]')) return input.checked;
+    const value = Number(input.value);
+    return Number.isFinite(value) ? value : input.value;
+  }
+
+  function rememberThresholdDraft(input) {
+    const key = input.dataset.threshold || input.dataset.sensor;
+    if (!key) return;
+    state.thresholdDraft[key] = thresholdInputValue(input);
+    state.thresholdFormDirty = true;
   }
 
   function setSettingsStatus(text) {
@@ -137,9 +154,13 @@
     }
 
     setSettingsStatus('保存中...');
-    state.thresholds = monitorModel.normalizeThresholds(nextThresholds);
+    state.thresholdFormSaving = true;
+    state.thresholds = monitorModel.normalizeThresholds({ ...state.thresholds, ...nextThresholds });
     if (location.protocol === 'file:') {
       localStorage.setItem('elderMonitorThresholds', JSON.stringify(state.thresholds));
+      state.thresholdFormDirty = false;
+      state.thresholdFormSaving = false;
+      state.thresholdDraft = {};
       setSettingsStatus('本地已保存');
       addLocalEvent('CONTROL UPDATED', '本地演示模式下传感器阈值已更新');
       renderThresholds();
@@ -154,16 +175,24 @@
       });
       const saved = await readJsonResponse(response, '保存阈值');
       state.thresholds = monitorModel.normalizeThresholds(saved.thresholds || saved);
+      state.thresholdFormDirty = false;
+      state.thresholdFormSaving = false;
+      state.thresholdDraft = {};
       flashSettingsSaved();
       renderThresholds();
     } catch (error) {
+      state.thresholdFormSaving = false;
       setSettingsStatus(error.message || '保存失败');
       renderThresholds();
+    } finally {
+      state.thresholdFormSaving = false;
     }
   }
 
   function resetThresholds() {
-    return saveThresholds(monitorModel.createDefaultThresholds());
+    state.thresholdDraft = monitorModel.createDefaultThresholds();
+    state.thresholdFormDirty = true;
+    return saveThresholds(state.thresholdDraft);
   }
 
   // SSE 与本地演示都会走这里，保证状态进入渲染前先完成统一推导。
@@ -329,9 +358,20 @@
     });
 
     if ($('thresholdForm')) {
+      $('thresholdForm').addEventListener('input', (event) => {
+        if (event.target.matches('[data-threshold], [data-sensor]')) {
+          rememberThresholdDraft(event.target);
+        }
+      });
+      $('thresholdForm').addEventListener('change', (event) => {
+        if (event.target.matches('[data-threshold], [data-sensor]')) {
+          rememberThresholdDraft(event.target);
+        }
+      });
       $('thresholdForm').addEventListener('submit', async (event) => {
         event.preventDefault();
-        await saveThresholds(readThresholdForm());
+        const payload = state.thresholdFormDirty ? readThresholdForm() : readFullThresholdForm();
+        await saveThresholds(payload);
       });
     }
 

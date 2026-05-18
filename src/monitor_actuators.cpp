@@ -34,8 +34,9 @@ void updateLighting(const DeviceControlState& controls) {
 void updateServoPosition(const DeviceControlState& controls) {
   if (alarmState.sos && controls.sosServo) {
     servo.write(ActuatorConfig::SERVO_SOS_ANGLE);
-  } else if (activityState.dark && controls.curtainAuto) {
-    servo.write(ActuatorConfig::SERVO_CURTAIN_CLOSED_ANGLE);
+  } else if (controls.curtainAuto) {
+    servo.write(activityState.dark ? ActuatorConfig::SERVO_CURTAIN_CLOSED_ANGLE
+                                   : ActuatorConfig::SERVO_CURTAIN_OPEN_ANGLE);
   } else {
     servo.write(ActuatorConfig::SERVO_NORMAL_ANGLE);
   }

@@ -154,7 +154,7 @@ void normalizeControlThresholds() {
 String buildAlinkPayload(const TelemetryPayload& payload) {
   JsonDocument doc;
   doc["id"] = String(messageId++);
-  doc["version"] = "1.0.5";
+  doc["version"] = "1.0.5.5";
   doc["method"] = "thing.event.property.post";
 
   JsonObject params = doc["params"].to<JsonObject>();

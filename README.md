@@ -101,7 +101,7 @@ MQ135、MQ7、FSR402、震动量在不同接线和模块电位器状态下原始
 - `WIFI_SSID` / `WIFI_PASSWORD`：填写路由器 WiFi。
 - `ALIYUN_REGION_ID`：填写阿里云物联网平台地域，例如 `cn-shanghai`。
 - `ALIYUN_PRODUCT_KEY` / `ALIYUN_DEVICE_NAME` / `ALIYUN_DEVICE_SECRET`：填写设备三元组。
-- `WEB_MIRROR_URL`：填写网页后端地址，例如 `http://192.168.1.10:3001/api/telemetry`。
+- `WEB_MIRROR_URL`：填写网页后端地址，当前阿里云地址为 `http://59.110.166.166/api/telemetry`。
 - `WEB_MIRROR_TOKEN`：和网页后端 `.env` 里的 `DEVICE_TOKEN` 保持一致。
 
 阿里云物模型建议添加以下属性标识符：
@@ -147,7 +147,7 @@ npm start
 打开：
 
 ```text
-http://localhost:3001
+http://59.110.166.166
 ```
 
 如果要先看演示效果，可以把 `.env` 中 `ENABLE_MOCK=false` 改成 `ENABLE_MOCK=true`，网页会自动生成模拟数据。
@@ -158,7 +158,7 @@ http://localhost:3001
 - P1：温度、湿度、光照三个核心环境数据窗口。
 - P2：传感器原始值、执行器状态、事件记录和趋势图。
 
-网页端还提供独立联动开关：暗环境自动开灯、暗环境人体经过亮灯、起夜记录统计、起夜联动开灯、告警强制开灯、气体异常通风、蜂鸣器告警、SOS 舵机动作、无人活动提醒。直接双击打开 `web/public/index.html` 时会进入本地演示模式；真实实时数据建议使用 `http://localhost:3001`。
+网页端还提供独立联动开关：暗环境自动开灯、暗环境人体经过亮灯、起夜记录统计、起夜联动开灯、告警强制开灯、气体异常通风、蜂鸣器告警、SOS 舵机动作、无人活动提醒。直接双击打开 `web/public/index.html` 时会进入本地演示模式；真实实时数据建议使用 `http://59.110.166.166`。
 
 重要信息采用强提醒机制：
 

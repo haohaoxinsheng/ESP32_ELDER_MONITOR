@@ -68,11 +68,12 @@
   }
 
   function renderActuatorReadings(data) {
+    const status = linkageStatus(data);
     setText('ledOn', onOff(effectiveLed(data)));
     setText('fanOn', onOff(effectiveFan(data)));
     setText('buzzerOn', onOff(effectiveBuzzer(data)));
     setText('servoOn', effectiveServo(data) ? '动作' : '复位');
-    setText('curtainOn', effectiveCurtain(data) ? '关闭' : '待机');
+    setText('curtainOn', status.curtain ? '关闭' : status.curtainOpen ? '打开' : '待机');
   }
 
   function renderStatePills(data) {
@@ -358,11 +359,21 @@
 
   function renderThresholds() {
     document.querySelectorAll('[data-threshold]').forEach((input) => {
-      input.value = state.thresholds[input.dataset.threshold] ?? '';
+      const key = input.dataset.threshold;
+      const hasDraft = Object.prototype.hasOwnProperty.call(state.thresholdDraft || {}, key);
+      const editing = hasDraft || (state.thresholdFormDirty && document.activeElement === input);
+      if (!editing && !state.thresholdFormSaving) {
+        input.value = state.thresholds[key] ?? '';
+      }
       input.disabled = !state.deviceOnline && location.protocol !== 'file:';
     });
     document.querySelectorAll('[data-sensor]').forEach((input) => {
-      input.checked = Boolean(state.thresholds[input.dataset.sensor]);
+      const key = input.dataset.sensor;
+      const hasDraft = Object.prototype.hasOwnProperty.call(state.thresholdDraft || {}, key);
+      const editing = hasDraft || (state.thresholdFormDirty && document.activeElement === input);
+      if (!editing && !state.thresholdFormSaving) {
+        input.checked = Boolean(state.thresholds[key]);
+      }
       input.disabled = !state.deviceOnline && location.protocol !== 'file:';
     });
     document.querySelectorAll('#thresholdForm button').forEach((button) => {
@@ -384,7 +395,7 @@
       ['nightLightState', status.nightLight ? '开启' : '关闭'],
       ['nightLightDetailState', status.nightLight ? '开启' : '关闭'],
       ['nightWakeLightState', status.nightWakeLight ? '开启' : '关闭'],
-      ['curtainState', status.curtain ? '关闭' : '待机'],
+      ['curtainState', status.curtain ? '关闭' : status.curtainOpen ? '打开' : '待机'],
       ['alarmLightState', status.alarmLight ? '开启' : '关闭'],
       ['buzzerState', status.buzzer ? '开启' : '关闭'],
       ['servoState', status.servo ? '动作' : '复位'],
@@ -401,6 +412,21 @@
     });
   }
 
+  function heldCriticalFrame(data, criticalType) {
+    if (criticalType) {
+      state.criticalHoldUntil = Date.now() + 4000;
+      state.criticalHoldData = { ...data };
+      state.criticalHoldType = criticalType;
+      return data;
+    }
+    if (state.criticalHoldData && Date.now() < state.criticalHoldUntil) {
+      return state.criticalHoldData;
+    }
+    state.criticalHoldData = null;
+    state.criticalHoldType = '';
+    return data;
+  }
+
   // 总入口：把一帧遥测数据分发到各个页面区域。
   function renderLatest(data) {
     if (!data) {
@@ -411,8 +437,11 @@
     refreshDeviceConnection();
     const critical = isCriticalTelemetry(data);
     const criticalType = criticalTypeOf(data);
-    const muted = isCriticalMuted(data, criticalType);
+    const displayData = heldCriticalFrame(data, criticalType);
+    const displayCriticalType = criticalType || state.criticalHoldType;
+    const muted = isCriticalMuted(displayData, displayCriticalType);
     const activeCritical = critical && !muted;
+    const bannerCritical = Boolean(displayCriticalType) && !muted;
 
     renderStatusClasses(data, activeCritical, muted);
     renderHeroReadings(data);
@@ -421,12 +450,12 @@
     renderStatePills(data);
     setText('updatedAt', new Date(data.timestamp).toLocaleString());
     renderOperationalSummary(data);
-    renderAlertSummary(data, activeCritical, muted);
+    renderAlertSummary(displayData, bannerCritical, muted);
     renderDangerCards(data);
-    renderTopBanner(data, activeCritical, muted);
+    renderTopBanner(displayData, bannerCritical, muted);
     renderAutomationPage(data);
 
-    if ($('ackCritical')) $('ackCritical').hidden = !(activeCritical && !muted);
+    if ($('ackCritical')) $('ackCritical').hidden = !(bannerCritical && !muted);
   }
 
   Object.assign(App, {
