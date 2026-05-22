@@ -116,6 +116,14 @@ float readFloatThreshold(const JsonDocument& doc, const char* key, float current
   return constrain(value, minValue, maxValue);
 }
 
+uint16_t readMinuteThreshold(const JsonDocument& doc, const char* key, uint16_t current) {
+  if (!doc[key].is<uint16_t>() && !doc[key].is<int>() && !doc[key].is<float>()) {
+    return current;
+  }
+  const int value = doc[key].as<int>();
+  return static_cast<uint16_t>(constrain(value, 1, 1440));
+}
+
 bool readBoolControl(const JsonDocument& doc, const char* key, bool current) {
   if (!doc[key].is<bool>()) {
     return current;
@@ -248,6 +256,7 @@ String buildMirrorPayload(const TelemetryPayload& payload) {
   setThreshold(thresholds, "luxDark", deviceControl.luxDark);
   setThreshold(thresholds, "bedPresenceRaw", deviceControl.bedPresenceRaw);
   setThreshold(thresholds, "fsrPressure", deviceControl.fsrPressure);
+  setThreshold(thresholds, "noMotionMinutes", deviceControl.noMotionMinutes);
 
   String output;
   serializeJson(doc, output);
@@ -356,6 +365,7 @@ void applyControlJson(const JsonDocument& doc) {
   deviceControl.luxDark = readFloatThreshold(doc, "luxDark", deviceControl.luxDark, 0.0F, 2000.0F);
   deviceControl.bedPresenceRaw = readRawThreshold(doc, "bedPresenceRaw", deviceControl.bedPresenceRaw);
   deviceControl.fsrPressure = readRawThreshold(doc, "fsrPressure", deviceControl.fsrPressure);
+  deviceControl.noMotionMinutes = readMinuteThreshold(doc, "noMotionMinutes", deviceControl.noMotionMinutes);
   normalizeControlThresholds();
   deviceControl.updatedAtMs = millis();
   deviceControl.valid = true;

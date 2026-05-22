@@ -41,7 +41,8 @@
     humidityLow: 25,
     luxDark: 60,
     bedPresenceRaw: 1200,
-    fsrPressure: 2300
+    fsrPressure: 2300,
+    noMotionMinutes: 30
   });
 
   function cloneDefaults(source) {
@@ -87,6 +88,8 @@
         next[highKey] = swap;
       }
     });
+
+    next.noMotionMinutes = Math.max(1, Math.min(1440, Math.round(next.noMotionMinutes)));
 
     return next;
   }

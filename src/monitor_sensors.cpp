@@ -76,7 +76,8 @@ void updateComfortAlarms(const DeviceControlState& controls) {
 void updateActivityAlarms(const DeviceControlState& controls, uint32_t now) {
   alarmState.pressure = controls.enableFsr && data.fsrRaw >= controls.fsrPressure;
   alarmState.vibration = controls.enableSw420 && data.vibration;
-  alarmState.noMotion = controls.noMotionWarning && (now - lastMotionMs) >= Timing::NO_MOTION_WARNING_MS;
+  const uint32_t noMotionWarningMs = static_cast<uint32_t>(controls.noMotionMinutes) * 60UL * 1000UL;
+  alarmState.noMotion = controls.noMotionWarning && (now - lastMotionMs) >= noMotionWarningMs;
   alarmState.fallDetected =
       alarmState.pressure &&
       (now - lastVibrationMs <= Timing::FALL_VIBRATION_WINDOW_MS) &&

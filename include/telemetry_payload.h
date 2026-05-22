@@ -2,6 +2,8 @@
 
 #include <Arduino.h>
 
+#include "config.h"
+
 struct TelemetryPayload {
   float temperatureC = NAN;
   float humidity = NAN;
@@ -65,6 +67,7 @@ struct DeviceControlState {
   float luxDark = 60.0F;
   uint16_t bedPresenceRaw = 1200;
   uint16_t fsrPressure = 2300;
+  uint16_t noMotionMinutes = Timing::NO_MOTION_WARNING_MINUTES;
   uint32_t updatedAtMs = 0;
   bool valid = false;
 };

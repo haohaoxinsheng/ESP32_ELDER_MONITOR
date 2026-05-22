@@ -136,6 +136,9 @@
                   <div><strong>PIR 人体活动</strong><span>有人经过、起夜和无人活动判断</span></div>
                   <input type="checkbox" data-sensor="enablePir" checked />
                 </div>
+                <div class="threshold-grid compact">
+                  <label><span>无人活动 分钟</span><input type="number" min="1" max="1440" step="1" data-threshold="noMotionMinutes" /></label>
+                </div>
               </section>
 
               <section class="sensor-setting">
@@ -187,6 +190,7 @@
             <div class="cloud-list">
               <div><span>空气/烟雾/CO</span><strong>达到预警值变黄，达到危险值触发红色提醒</strong></div>
               <div><span>暗环境</span><strong>低于 Lux 阈值且有人活动时触发起夜联动</strong></div>
+              <div><span>无人活动</span><strong>PIR 超过设置分钟数未检测到活动时触发看护提醒</strong></div>
               <div><span>在床压力</span><strong>FSR 高于在床阈值判定已上床，低于阈值判定离床</strong></div>
               <div><span>压力异常</span><strong>超过 FSR 阈值时进入看护风险判断</strong></div>
               <div><span>地震报警</span><strong>震动量高于设置阈值时触发红色强提醒</strong></div>
