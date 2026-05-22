@@ -11,6 +11,8 @@
     deriveTelemetry,
     updateDeviceConnection,
     refreshDeviceConnection,
+    loadSavedTheme,
+    toggleTheme,
     updateTopbarGlass,
     bindLiquidGlassInteraction,
     renderLatest,
@@ -386,9 +388,7 @@
     }
 
     if ($('themeButton')) {
-      $('themeButton').addEventListener('click', () => {
-        document.body.classList.toggle('light-mode');
-      });
+      $('themeButton').addEventListener('click', toggleTheme);
     }
 
     document.querySelectorAll('.nav-item').forEach((button) => {
@@ -414,6 +414,7 @@
 
   // 页面启动入口：恢复本地状态、拉取阈值、连接数据流并挂载交互。
   function initializeApp() {
+    loadSavedTheme();
     renderLatest(null);
     if ($('trendChart')) drawTrend();
     renderEvents();

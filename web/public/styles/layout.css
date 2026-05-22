@@ -134,14 +134,17 @@
   box-shadow: 0 14px 34px rgba(0, 0, 0, 0.18);
 }
 
+html.light-mode .topbar,
 body.light-mode .topbar {
   background: var(--topbar-bg);
 }
 
+html.light-mode .topbar::after,
 body.light-mode .topbar::after {
   background: var(--topbar-feather);
 }
 
+html.light-mode .topbar.scrolled,
 body.light-mode .topbar.scrolled {
   background: var(--topbar-bg-scrolled);
   box-shadow: 0 14px 34px rgba(50, 89, 103, 0.1);
@@ -178,6 +181,7 @@ body.light-mode .topbar.scrolled {
   display: none;
 }
 
+html.light-mode .floating-nav,
 body.light-mode .floating-nav {
   background: var(--floating-nav-bg);
   box-shadow:

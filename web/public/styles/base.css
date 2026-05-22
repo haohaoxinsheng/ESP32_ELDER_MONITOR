@@ -47,6 +47,7 @@
     rgb(10 23 33 / calc(0.22 + var(--scroll-progress, 0) * 0.2));
 }
 
+html.light-mode,
 body.light-mode {
   color-scheme: light;
   --bg: #e9f5f7;
@@ -88,6 +89,7 @@ body {
   overflow-x: hidden;
 }
 
+html.light-mode body,
 body.light-mode {
   background:
     linear-gradient(135deg, rgba(8, 126, 164, 0.12), transparent 30%),

@@ -28,6 +28,43 @@
   };
 
   const $ = (id) => document.getElementById(id);
+  const THEME_STORAGE_KEY = 'elderMonitorTheme';
+
+  function currentTheme() {
+    return document.documentElement.classList.contains('light-mode') ? 'light' : 'dark';
+  }
+
+  // 主题挂在 html 节点上，跨页面共享并避免页面跳转时样式不一致。
+  function applyTheme(theme) {
+    const normalized = theme === 'light' ? 'light' : 'dark';
+    document.documentElement.classList.toggle('light-mode', normalized === 'light');
+    document.body.classList.toggle('light-mode', normalized === 'light');
+    const button = $('themeButton');
+    if (button) {
+      button.setAttribute('aria-pressed', normalized === 'light' ? 'true' : 'false');
+      button.title = normalized === 'light' ? '切换到深色主题' : '切换到浅色主题';
+    }
+  }
+
+  function loadSavedTheme() {
+    let saved = '';
+    try {
+      saved = localStorage.getItem(THEME_STORAGE_KEY) || '';
+    } catch (error) {
+      saved = '';
+    }
+    applyTheme(saved === 'light' ? 'light' : 'dark');
+  }
+
+  function toggleTheme() {
+    const nextTheme = currentTheme() === 'light' ? 'dark' : 'light';
+    applyTheme(nextTheme);
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, nextTheme);
+    } catch (error) {
+      // 存储不可用时仍保持当前页面主题切换可用。
+    }
+  }
 
   // 根据滚动进度更新顶部栏和悬浮页签的液态玻璃变量。
   function updateTopbarGlass() {
@@ -249,6 +286,11 @@
     monitorModel,
     state,
     $,
+    THEME_STORAGE_KEY,
+    currentTheme,
+    applyTheme,
+    loadSavedTheme,
+    toggleTheme,
     updateTopbarGlass,
     bindLiquidGlassInteraction,
     alarmLabel,
