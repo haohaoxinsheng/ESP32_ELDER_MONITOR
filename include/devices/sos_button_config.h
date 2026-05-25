@@ -1,3 +1,4 @@
+// SOS 按键配置：定义按键输入引脚和消抖时间。
 #pragma once
 
 #include <Arduino.h>

@@ -1,3 +1,4 @@
+// 遥测与控制数据结构：定义 ESP32 上报给云端/Web 的字段，以及网页下发的控制阈值。
 #pragma once
 
 #include <Arduino.h>
@@ -16,6 +17,7 @@ struct TelemetryPayload {
   bool pirMotion = false;
   bool vibration = false;
   bool sos = false;
+  bool noMotion = false;
   bool fallDetected = false;
   bool dark = false;
   bool bedOccupied = false;
@@ -29,6 +31,7 @@ struct TelemetryPayload {
   bool nightLightOn = false;
   bool nightWakeLightOn = false;
   bool alarmLightOn = false;
+  bool servoActive = false;
   const char* dangerLevel = "normal";
   const char* alarmText = "NORMAL";
 };

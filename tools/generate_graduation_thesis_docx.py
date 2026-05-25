@@ -1,0 +1,557 @@
+from __future__ import annotations
+
+import html
+import math
+import os
+import re
+import shutil
+import struct
+import zipfile
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[1]
+DOCS = ROOT / "docs"
+PICTURE_DIR = ROOT.parents[1] / "picture"
+OUT = DOCS / "非接触式老年人居家监测系统毕业论文_15000字以上_30页以上.docx"
+MANUSCRIPT = DOCS / "非接触式老年人居家监测系统毕业论文_正文.md"
+
+TITLE = "非接触式老年人居家监测系统设计与实现"
+
+
+def xml_escape(text: str) -> str:
+    return html.escape(str(text), quote=False)
+
+
+def paragraph(text: str = "", style: str | None = None, align: str | None = None,
+              bold: bool = False, size: int | None = None, first_line: bool = False,
+              spacing: int = 360) -> str:
+    ppr = []
+    if style:
+        ppr.append(f'<w:pStyle w:val="{style}"/>')
+    if align:
+        ppr.append(f'<w:jc w:val="{align}"/>')
+    if first_line:
+        ppr.append('<w:ind w:firstLineChars="200"/>')
+    if spacing:
+        ppr.append(f'<w:spacing w:line="{spacing}" w:lineRule="auto" w:after="80"/>')
+    rpr = []
+    if bold:
+        rpr.append("<w:b/>")
+    if size:
+        rpr.append(f'<w:sz w:val="{size}"/><w:szCs w:val="{size}"/>')
+    rpr_xml = f"<w:rPr>{''.join(rpr)}</w:rPr>" if rpr else ""
+    text_xml = ""
+    parts = str(text).split("\n")
+    for index, part in enumerate(parts):
+        if index:
+            text_xml += "<w:br/>"
+        text_xml += f'<w:t xml:space="preserve">{xml_escape(part)}</w:t>'
+    return f"<w:p><w:pPr>{''.join(ppr)}</w:pPr><w:r>{rpr_xml}{text_xml}</w:r></w:p>"
+
+
+def heading(text: str, level: int) -> str:
+    style = "Heading1" if level == 1 else "Heading2" if level == 2 else "Heading3"
+    size = 32 if level == 1 else 28 if level == 2 else 24
+    return paragraph(text, style=style, bold=True, size=size, spacing=360)
+
+
+def page_break() -> str:
+    return '<w:p><w:r><w:br w:type="page"/></w:r></w:p>'
+
+
+def table(rows: list[list[str]]) -> str:
+    col_count = max(len(r) for r in rows)
+    width = math.floor(9000 / col_count)
+    grid = "".join(f'<w:gridCol w:w="{width}"/>' for _ in range(col_count))
+    body = []
+    for r_index, row in enumerate(rows):
+        cells = []
+        for value in row + [""] * (col_count - len(row)):
+            fill = '<w:shd w:fill="D9EAF7"/>' if r_index == 0 else ""
+            cells.append(
+                "<w:tc>"
+                f'<w:tcPr><w:tcW w:w="{width}" w:type="dxa"/>{fill}'
+                '<w:tcBorders><w:top w:val="single" w:sz="4" w:color="7A8A99"/>'
+                '<w:left w:val="single" w:sz="4" w:color="7A8A99"/>'
+                '<w:bottom w:val="single" w:sz="4" w:color="7A8A99"/>'
+                '<w:right w:val="single" w:sz="4" w:color="7A8A99"/></w:tcBorders>'
+                "</w:tcPr>"
+                f"{paragraph(value, bold=r_index == 0, spacing=300)}"
+                "</w:tc>"
+            )
+        body.append(f"<w:tr>{''.join(cells)}</w:tr>")
+    return (
+        '<w:tbl><w:tblPr><w:tblW w:w="9000" w:type="dxa"/>'
+        '<w:tblLook w:firstRow="1" w:noHBand="0" w:noVBand="1"/></w:tblPr>'
+        f"<w:tblGrid>{grid}</w:tblGrid>{''.join(body)}</w:tbl>"
+    )
+
+
+def image_size(path: Path) -> tuple[int, int]:
+    data = path.read_bytes()
+    if path.suffix.lower() == ".png" and data[:8] == b"\x89PNG\r\n\x1a\n":
+        return struct.unpack(">II", data[16:24])
+    if path.suffix.lower() in {".jpg", ".jpeg"}:
+        i = 2
+        while i < len(data):
+            if data[i] != 0xFF:
+                i += 1
+                continue
+            marker = data[i + 1]
+            i += 2
+            if marker in (0xD8, 0xD9):
+                continue
+            length = struct.unpack(">H", data[i:i + 2])[0]
+            if marker in range(0xC0, 0xC4):
+                height, width = struct.unpack(">HH", data[i + 3:i + 7])
+                return width, height
+            i += length
+    return 1200, 800
+
+
+def image_paragraph(rid: str, path: Path, caption: str, max_width_in: float = 5.8) -> str:
+    width, height = image_size(path)
+    ratio = height / max(width, 1)
+    cx = int(max_width_in * 914400)
+    cy = int(cx * ratio)
+    if cy > int(4.2 * 914400):
+        cy = int(4.2 * 914400)
+        cx = int(cy / ratio)
+    name = xml_escape(path.name)
+    drawing = f"""
+    <w:p><w:pPr><w:jc w:val="center"/><w:spacing w:after="80"/></w:pPr><w:r><w:drawing>
+    <wp:inline distT="0" distB="0" distL="0" distR="0"
+      xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing">
+      <wp:extent cx="{cx}" cy="{cy}"/>
+      <wp:docPr id="{rid[3:]}" name="{name}"/>
+      <a:graphic xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">
+        <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+          <pic:pic xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+            <pic:nvPicPr><pic:cNvPr id="0" name="{name}"/><pic:cNvPicPr/></pic:nvPicPr>
+            <pic:blipFill><a:blip r:embed="{rid}" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+            <pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="{cx}" cy="{cy}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>
+          </pic:pic>
+        </a:graphicData>
+      </a:graphic>
+    </wp:inline></w:drawing></w:r></w:p>
+    """
+    return drawing + paragraph(caption, align="center", size=21, spacing=300)
+
+
+def thesis_paragraphs() -> list[tuple[str, str | int | list[list[str]]]]:
+    return [
+        ("h1", "摘  要"),
+        ("p", "随着人口老龄化程度不断加深，独居、空巢以及半独居老年人的居家安全问题逐渐成为社区养老与智慧家庭领域的重要课题。传统人工看护方式依赖家属或护理人员定时查看，存在连续性不足、异常发现滞后和照护成本较高等问题；单一摄像头方案虽然能够提供画面信息，但容易带来隐私压力，也不适合卧室、卫生间等敏感生活场景。因此，设计一种低成本、低侵入、可连续运行并具备本地联动能力的非接触式居家监测系统，具有较强的工程实践意义和应用价值。"),
+        ("p", "本文围绕“非接触式老年人居家监测系统设计与实现”展开研究，以 ESP32-S3-N16R8 为核心控制器，结合 DHT22、BH1750、MQ2、MQ135、MQ7、HC-SR501、SW-420、FSR402、SOS 按键、SSD1306 OLED、蜂鸣器、LED、继电器风扇和 SG90 舵机等模块，完成了环境感知、安全风险识别、起夜辅助、本地声光告警、云端镜像上报和 Web 可视化控制等功能。系统采用“感知层、控制层、执行层、显示与云端交互层”的分层结构，硬件端负责多源数据采集和实时联动，网页端负责状态展示、事件记录、阈值下发、联动开关管理和离线保护。"),
+        ("p", "在软件实现方面，本文将固件划分为传感器采集、告警判断、执行器控制、OLED 显示、云端通信、遥测封装等模块，并通过独立配置文件保存引脚和阈值，增强了系统的可维护性。系统使用多源阈值融合方法推导老人居家状态：气体、温湿度、压力和振动通过阈值比较生成预警或危险状态；PIR 与 BH1750 共同判断暗环境活动和起夜行为；SW-420 剧烈振动、FSR 压力异常以及 PIR 长时间无活动共同参与疑似跌倒判断；SOS 按键提供人工主动求助入口。执行器侧按照风险等级控制风扇、蜂鸣器、LED 和舵机，使系统在网络不可用时仍具有独立报警能力。"),
+        ("p", "在测试验证方面，本文从硬件连线、固件编译、传感器采集、阈值触发、联动执行、Web 数据展示、远程配置和离线保护等角度进行了系统性测试。测试结果表明，系统能够稳定展示温湿度、光照、空气质量、烟雾、一氧化碳、人体活动、床位压力和振动等数据；当出现空气异常、强震动、长时间无活动、暗环境人体活动、起夜离床、设备离线等场景时，系统能够在本地 OLED 与 Web 面板中呈现对应状态，并按设置触发灯光、风扇、蜂鸣器或事件记录。本文所设计系统具有成本低、结构清晰、功能覆盖较完整、扩展性较强等特点，可作为智慧养老场景下非接触式居家安全监测的原型系统。"),
+        ("p", "关键词：ESP32-S3；智慧养老；非接触式监测；多传感器融合；Web 可视化；居家安全"),
+        ("h1", "Abstract"),
+        ("p", "With the growth of the aging population, home safety monitoring for elderly people living alone has become an important topic in smart home and community care. This thesis designs and implements a non-contact elderly home monitoring system based on ESP32-S3. The system integrates environmental sensing, gas safety detection, motion detection, vibration detection, pressure sensing, SOS request, local alarm linkage, cloud mirroring and a Web dashboard. Compared with camera-centered solutions, the proposed system reduces privacy pressure and provides continuous monitoring through multiple low-cost sensors."),
+        ("p", "The hardware terminal uses ESP32-S3-N16R8 as the core controller and connects DHT22, BH1750, MQ2, MQ135, MQ7, HC-SR501, SW-420, FSR402, SSD1306 OLED, buzzer, LED light, fan relay and SG90 servo. The firmware is organized into modules for sensor acquisition, alarm derivation, actuator control, display rendering, cloud communication and telemetry packaging. Rule-based multi-source fusion is adopted to detect environmental risks, gas hazards, night activity, no-motion warning, suspected fall and manual SOS request. The Web service receives telemetry data, maintains event records and night-wake records, supports threshold configuration and linkage switches, and pushes real-time updates through Server-Sent Events."),
+        ("p", "Testing results show that the system can collect and display key sensor data continuously, trigger local and remote warnings under abnormal conditions, and keep core alarm functions available even when the network dashboard is unavailable. The system is low-cost, modular, maintainable and extensible, and can be further improved with mobile notification, long-term data analysis and industrialized enclosure design."),
+        ("p", "Key words: ESP32-S3; elderly care; non-contact monitoring; multi-sensor fusion; Web dashboard; home safety"),
+        ("page", ""),
+        ("h1", "目  录"),
+        ("p", "第1章 绪论\n第2章 系统需求分析与总体方案设计\n第3章 系统硬件设计\n第4章 系统软件设计\n第5章 Web 可视化与云端通信设计\n第6章 系统测试与结果分析\n第7章 总结与展望\n参考文献\n致谢"),
+        ("page", ""),
+        ("h1", "第1章 绪论"),
+        ("h2", "1.1 研究背景"),
+        ("p", "我国人口结构正在经历深刻变化，老年人口数量持续增长，家庭规模小型化和子女外出工作使得传统家庭照护面临压力。对于独居或半独居老人而言，突发跌倒、气体泄漏、火情、一氧化碳中毒、夜间起身摔倒、长时间无人活动等风险具有突发性和隐蔽性。如果异常状态不能被及时发现，轻则造成生活不便，重则可能造成严重人身伤害。居家养老的核心难点并不只是“能否看到老人”，而是能否在不打扰老人生活、不侵犯隐私的条件下，连续获得足够反映安全状态的环境和行为线索。"),
+        ("p", "目前常见的居家监测方式包括人工巡查、电话问候、摄像头监控、智能手环、门磁和单一传感器报警器等。人工巡查可靠但成本高，连续性差；摄像头信息丰富但隐私争议明显，尤其在卧室、卫生间、床边等场景不容易被老人接受；智能手环依赖佩戴习惯，老人忘记充电或摘下设备后会造成监测缺口；传统燃气报警器、烟雾报警器、人体红外灯控等设备功能单一，难以形成完整的居家安全画像。由此可见，面向老年人居家照护的系统需要在准确性、低成本、低侵入、易维护和可扩展之间取得平衡。"),
+        ("p", "嵌入式物联网技术为该问题提供了新的工程路径。ESP32-S3 具备较强的处理能力、丰富的 GPIO、ADC、I2C、PWM 等外设接口，并支持 WiFi 通信，适合构建低成本、多传感器、可联网的边缘监测终端。通过组合温湿度、光照、空气质量、烟雾、一氧化碳、人体红外、振动、压力和按键等信息，可以在不采集视频画面的情况下，对居家环境安全、老人活动状态和异常事件进行判断。再结合 OLED 本地显示、蜂鸣器和灯光提醒、风扇通风、舵机辅助以及 Web 端实时面板，系统能够形成从感知、判断、执行到展示的完整闭环。"),
+        ("h2", "1.2 研究意义"),
+        ("p", "本课题的意义首先体现在居家安全保障上。老人发生危险时，最宝贵的是第一时间发现和第一时间提醒。系统通过多源传感器持续采集状态数据，能够在气体异常、空气质量变差、温湿度异常、暗环境活动、疑似跌倒、SOS 求助和长时间无活动等情况下快速生成告警，并通过本地蜂鸣器、LED、风扇和 Web 页面事件记录进行响应。即使网络暂时不可用，本地端也能继续执行核心联动，降低单纯依赖云端平台带来的失效风险。"),
+        ("p", "其次，本课题具有较强的隐私友好性。系统没有使用摄像头和麦克风作为核心感知手段，而是使用非图像化传感器描述环境和活动变化。对于卧室、客厅、床边等场景，这种方案更容易被老人和家属接受。虽然非接触式传感器无法像视频一样提供细节画面，但其优势在于数据边界清晰、部署位置灵活、长期运行成本低，适合构建“发现异常并提醒处理”的基础设施。"),
+        ("p", "再次，本课题具有良好的工程训练价值。系统涉及嵌入式硬件接线、传感器采集、ADC 数据处理、I2C 显示、PWM 舵机控制、继电器驱动、阈值管理、状态机设计、HTTP/MQTT 通信、Node.js 后端、SSE 实时推送、Web 前端交互和云服务器部署等多个环节。毕业设计不仅要求功能能够运行，还要求软硬件结构清晰、代码可维护、测试过程可复现、文档与实物一致。因此，本项目适合作为综合性嵌入式与物联网毕业设计题目。"),
+        ("h2", "1.3 国内外研究现状"),
+        ("p", "智慧养老领域的研究主要集中在生命体征监测、行为识别、环境安全检测、远程照护平台和智能家居联动等方向。生命体征监测通常依赖可穿戴设备或床垫式传感器，可以获得心率、血氧、睡眠等数据，但对佩戴舒适性和设备维护要求较高。行为识别研究中，摄像头、毫米波雷达、红外阵列、门磁、压力垫和惯性传感器均有应用，其中摄像头识别能力强但隐私压力大，毫米波雷达隐私性较好但成本相对较高。环境安全检测则更多采用烟雾、燃气、一氧化碳、温湿度等传感器，技术成熟但单点设备之间缺少联动。"),
+        ("p", "在工程产品层面，许多智能家居设备已经支持手机 App 查看状态和远程控制，但面向老年人安全照护的系统仍存在碎片化问题。例如，燃气报警器只负责燃气，人体红外灯只负责照明，智能手环只负责佩戴者自身状态，摄像头只负责视频查看。真正适合居家养老的系统需要把这些分散信息整合成统一风险等级，并在老人不主动操作的情况下自动完成提醒、通风、照明和事件记录。"),
+        ("p", "从成本和可实现性看，基于 ESP32 的开源物联网方案具有明显优势。ESP32 生态成熟，传感器模块价格低，Arduino Framework 和 PlatformIO 降低了开发门槛，Node.js 可以快速构建轻量级 Web 后端。本文设计的系统没有追求复杂算法模型，而是优先采用可解释、可调试、可部署的规则融合方法，使每个告警条件都能与具体传感器读数和阈值对应。这种设计更适合毕业设计和原型验证阶段，也便于后续在采集到更多真实数据后再引入机器学习或统计模型。"),
+        ("h2", "1.4 本文主要研究内容"),
+        ("p", "本文围绕非接触式老年人居家监测系统完成以下工作：第一，分析老人居家安全场景，明确系统需要覆盖的环境监测、气体安全、人体活动、压力振动、SOS 求助、本地告警和远程展示等需求；第二，设计以 ESP32-S3-N16R8 为核心的硬件结构，完成各传感器、执行器、OLED 显示和扩展 PCB 接口的引脚分配；第三，完成固件模块化开发，将采集、判断、联动、显示、云通信和遥测封装拆分为独立模块；第四，设计 Web 后端和前端面板，实现遥测接收、历史数据、事件记录、起夜记录、阈值下发、联动开关和离线保护；第五，结合实物图、网页截图和测试用例，对系统功能进行验证和分析。"),
+        ("page", ""),
+        ("h1", "第2章 系统需求分析与总体方案设计"),
+        ("h2", "2.1 应用场景分析"),
+        ("p", "本系统的典型应用场景为老人居家生活空间，包括卧室、客厅、床边和门厅附近。系统需要长期上电运行，持续采集环境与活动状态，在不要求老人学习复杂操作的前提下完成监测。老人日常活动通常包括坐卧、起身、夜间走动、开关灯、做饭或休息等；异常场景可能包括长时间无活动、夜间起床未开灯、摔倒后无法求助、燃气或烟雾异常、一氧化碳浓度升高、室内温湿度不适、设备掉线等。"),
+        ("p", "针对这些场景，系统不应只依赖单个传感器。例如，只有 PIR 检测不到人体活动并不能说明老人一定发生危险，可能只是老人处于静坐、睡眠或传感器盲区；只有振动传感器触发也不能说明跌倒，可能是桌面碰撞或模块被移动；只有压力传感器数值变化也可能来自床垫姿态变化。因此，系统采用多源信号组合和阈值优先级判断，把简单传感器组合成更可靠的事件描述。"),
+        ("p", "同时，老人居家环境对系统易用性有明确要求。第一，设备应尽量自动运行，减少老人主动配置；第二，本地提醒必须直观，OLED、灯光和蜂鸣器应能快速表达状态；第三，远程网页应便于家属查看，不能只显示原始数值，还要给出风险等级和事件记录；第四，阈值需要可调，因为不同家庭环境、传感器个体差异和接线条件会导致原始值不同；第五，设备离线时应提示并锁定设置，避免用户误以为配置已经下发。"),
+        ("h2", "2.2 功能需求"),
+        ("p", "系统的功能需求可以概括为六类。第一类是环境监测需求，包括温度、湿度和光照强度。温湿度用于判断居住舒适度，高温或高湿可能触发通风提醒，低温或低湿则作为环境提醒；光照用于判断暗环境，并与 PIR 人体活动结合实现夜间辅助开灯。第二类是气体安全需求，包括 MQ2 烟雾/可燃气体、MQ135 空气质量和 MQ7 一氧化碳检测。三类气体风险分别设置预警和危险阈值，其中一氧化碳危险优先级最高。"),
+        ("p", "第三类是人体活动与起夜需求。PIR 传感器用于检测人体活动，系统记录最近活动时间，用于长时间无活动提醒；当光照低于阈值且 PIR 检测到活动时，系统判定为夜间活动并点亮 LED；当床位压力从占用变为离床、同时处于暗环境并检测到人体活动时，Web 端记录起夜行为。第四类是异常安全需求。SW-420 振动、FSR402 压力、PIR 无活动窗口共同参与疑似跌倒判断；SOS 按键用于老人主动求助，触发蜂鸣器和舵机动作。"),
+        ("p", "第五类是执行器联动需求。气体异常或温湿度异常时启动风扇继电器；暗环境或夜间活动时打开 LED；危险告警时 LED 闪烁并触发蜂鸣器；SOS 按键触发舵机动作；窗帘舵机可根据暗环境自动开合。第六类是远程展示和管理需求。Web 面板需要展示实时数据、历史趋势、事件记录、设备在线状态、阈值设置、联动开关和演示模式，并通过 SSE 保持浏览器实时更新。"),
+        ("h2", "2.3 非功能需求"),
+        ("p", "系统的非功能需求主要包括可靠性、可维护性、可扩展性、低成本和隐私保护。可靠性方面，固件应能在单个传感器缺测时继续运行，网页端应能判断设备离线并给出提示；核心告警不能完全依赖云平台，本地执行器必须具备独立动作能力。可维护性方面，代码应避免把所有逻辑堆在主程序中，应按传感器、执行器、显示、通信等边界拆分模块，并集中保存阈值和引脚。可扩展性方面，系统应支持后续接入手机推送、短信、数据库、规则引擎或更多传感器。"),
+        ("p", "低成本方面，本系统优先使用常见模块化传感器和开发板，便于购买和替换。ESP32-S3、DHT22、BH1750、MQ 系列、PIR、SW-420、FSR402、SSD1306 OLED 等模块均具备较低成本和较成熟资料。隐私保护方面，系统不依赖摄像头，不采集人脸、声音和视频，只记录抽象传感器状态，符合居家卧室和床边场景的基本隐私需求。"),
+        ("h2", "2.4 总体架构设计"),
+        ("p", "系统总体架构分为感知层、控制层、执行层、显示交互层和云端 Web 层。感知层由温湿度、光照、气体、人体红外、振动、压力和 SOS 按键组成，负责把环境和行为变化转换为可采集信号。控制层由 ESP32-S3-N16R8 承担，负责周期采样、阈值判断、状态融合、执行器控制和数据上报。执行层由蜂鸣器、LED、继电器风扇和 SG90 舵机构成，负责把风险判断转换为物理动作。显示交互层由 OLED 和串口日志构成，提供本地状态查看和调试入口。云端 Web 层由 Node.js 后端和前端 Dashboard 构成，负责接收遥测、保存控制、推送状态和提供可视化页面。"),
+        ("table", [["层级", "组成模块", "主要职责"], ["感知层", "DHT22、BH1750、MQ2、MQ135、MQ7、PIR、SW-420、FSR402、SOS", "采集温湿度、光照、气体、人体活动、振动、压力和求助状态"], ["控制层", "ESP32-S3-N16R8、Arduino Framework、PlatformIO", "周期采样、阈值判断、状态融合、通信和执行控制"], ["执行层", "蜂鸣器、LED、继电器风扇、SG90 舵机", "本地声光提醒、通风、窗帘或求助动作"], ["显示交互层", "SSD1306 OLED、串口日志", "显示关键状态、辅助调试和现场演示"], ["Web 层", "Node.js、HTTP API、SSE、前端页面", "远程展示、阈值下发、联动配置、事件记录和离线保护"]]),
+        ("p", "总体架构的核心思想是边缘自治与远程可视化相结合。ESP32 端完成最关键的采集和本地联动，保证实时性；Web 端承担更适合大屏和浏览器的展示、历史记录和参数配置。两者之间通过统一遥测数据结构连接，固件中的 TelemetryPayload 与 Web 共享模型字段保持一致，避免前后端字段漂移。"),
+        ("page", ""),
+        ("h1", "第3章 系统硬件设计"),
+        ("h2", "3.1 主控模块选型"),
+        ("p", "本系统选择 ESP32-S3-N16R8 开发板作为主控。该芯片具有双核处理能力、较丰富的 GPIO、ADC、I2C、PWM、串口和 WiFi 能力，适合同时连接多种传感器与执行器。相比传统 Arduino UNO，ESP32-S3 的主频、存储资源和联网能力更适合物联网监测系统；相比 Raspberry Pi 等单板计算机，ESP32-S3 功耗更低、启动更快、成本更低，更适合长期嵌入式运行。"),
+        ("p", "在工程配置中，PlatformIO 环境指定板型为 esp32-s3-devkitc-1-n16r8，Flash 大小为 16MB，启用 qio_opi 存储类型和 PSRAM 标志。依赖库包括 Adafruit GFX、Adafruit SSD1306、DHT sensor library、BH1750、ESP32Servo、ArduinoJson 和 PubSubClient。这些库分别服务于 OLED 绘图、温湿度读取、光照读取、舵机控制、JSON 序列化和 MQTT 通信。"),
+        ("h2", "3.2 传感器模块设计"),
+        ("p", "DHT22 用于采集温度和湿度，数据引脚接 GPIO7。温湿度数据可反映室内舒适度与异常环境，高温或高湿触发通风提醒，低温或低湿作为普通环境提醒。DHT22 相比 DHT11 精度更高、测量范围更广，适合毕业设计中对环境状态的展示。系统中温度高阈值配置为 32℃，低温阈值为 10℃，湿度高阈值为 80%，低湿阈值为 25%。"),
+        ("p", "BH1750 用于采集光照强度，采用 I2C 通信，SDA 接 GPIO17，SCL 接 GPIO18，地址为 0x23。光照数据用于判断暗环境，网页默认暗光阈值为 60 lux，固件配置中也保留夜间活动参考阈值。系统没有简单地把光照低作为告警，而是将其与 PIR 人体活动、床位压力等信息组合，形成暗环境自动开灯、夜间活动和起夜联动。"),
+        ("p", "MQ2、MQ135 和 MQ7 分别用于烟雾/可燃气体、空气质量和一氧化碳风险检测。三者均使用模拟输出接入 ESP32-S3 ADC，其中 MQ2 接 GPIO3，MQ135 接 GPIO4，MQ7 接 GPIO5。由于 MQ 系列传感器受预热时间、供电、电位器调节和环境影响较大，系统采用原始 ADC 阈值而非绝对浓度值进行演示判断，并提供 Web 阈值下发能力，便于根据现场读数调节。默认阈值为 MQ2 预警 1900、危险 2400，MQ135 预警 2300、危险 2800，MQ7 预警 1900、危险 2100。"),
+        ("p", "HC-SR501 PIR 人体红外传感器用于检测人体活动，输出接 GPIO10。PIR 不是持续定位传感器，而是对人体红外变化敏感，因此更适合判断“是否出现活动”。系统将 PIR 的高电平作为活动更新依据，记录最近活动时间；在暗环境下检测到活动时，判定夜间活动并点亮 LED；长时间没有活动时，系统进入无人活动提醒。"),
+        ("p", "SW-420 振动传感器接 GPIO11，用于检测振动或剧烈撞击。FSR402 压力传感器接 GPIO6，用于判断床位占用和压力异常，床位占用阈值为 1200，压力告警阈值为 2300。单独使用振动或压力都容易产生误判，因此系统将振动窗口、压力状态和 PIR 无活动窗口组合，用于判断疑似跌倒。SOS 按键接 GPIO12，作为老人主动求助入口，软件侧使用消抖逻辑避免机械抖动误触发。"),
+        ("table", [["模块", "型号/功能", "ESP32-S3 引脚", "关键参数"], ["温湿度", "DHT22", "GPIO7", "高温32℃、低温10℃、高湿80%、低湿25%"], ["光照", "BH1750", "GPIO17/GPIO18", "I2C地址0x23、暗光60lux"], ["烟雾/可燃气体", "MQ2", "GPIO3 ADC", "预警1900、危险2400"], ["空气质量", "MQ135", "GPIO4 ADC", "预警2300、危险2800"], ["一氧化碳", "MQ7", "GPIO5 ADC", "预警1900、危险2100"], ["人体活动", "HC-SR501 PIR", "GPIO10", "高电平表示检测到活动"], ["振动", "SW-420", "GPIO11", "触发时按4095震动量上报"], ["压力", "FSR402", "GPIO6 ADC", "床位1200、压力2300"], ["求助", "SOS按键", "GPIO12", "低电平按下并消抖"]]),
+        ("h2", "3.3 执行器与显示模块设计"),
+        ("p", "执行器部分包括蜂鸣器、风扇继电器、LED 灯和 SG90 舵机。蜂鸣器接 GPIO13，用于普通告警间歇鸣叫和危险告警持续提示；风扇继电器接 GPIO14，用于气体异常或温湿度异常时启动通风；LED 灯接 GPIO15，项目中根据实测模块将 LED 有效电平配置为低电平有效，避免灯光逻辑反向；SG90 舵机接 GPIO16，可用于 SOS 求助动作或窗帘开合演示。"),
+        ("p", "OLED 采用 SSD1306 0.96 寸显示屏，I2C 接 GPIO8 和 GPIO9，地址为 0x3C。小尺寸 OLED 不适合展示所有遥测字段，因此系统显示策略以关键状态为主，突出老人是否跌倒、温湿度、空气质量、灯光和告警等级。串口日志则用于输出更完整的数据，方便调试和阈值校准。"),
+        ("h2", "3.4 PCB 与接口设计"),
+        ("p", "为了减少杜邦线连接带来的松动和接线混乱，项目提供了 KiCad 扩展底板工程。该 PCB 定位为 ESP32-S3 DevKitC 开发板扩展底板，而不是裸 ESP32-S3 模组射频板。板子采用双层结构，外形尺寸约 100mm × 80mm，板厚 1.6mm，主要走线 0.3mm，电源走线 0.8mm，背面铺铜作为 GND。ESP32-S3 开发板通过双排 22pin 排母插接，两排中心距按实物资料校准为约 24.94mm。"),
+        ("p", "扩展板上按功能设置了多个接口，包括 5V 电源输入、OLED、BH1750、DHT22、HC-SR501、MQ135、MQ7、FSR402、SW420、SOS、蜂鸣器、风扇继电器、LED 和 SG90 舵机。HC-SR501 接口 J7 的三针顺序为 GND、5V、OUT，OUT 对应 GPIO10。PCB 说明中特别指出，MQ 系列模拟输出必须确认不超过 3.3V，如果模块 AO 可能输出 5V，需要增加分压电阻；舵机、继电器和 MQ 模块电流较大，应使用外部 5V 电源，并保证 ESP32 与外部电源共地。"),
+        ("h2", "3.5 供电与安全注意事项"),
+        ("p", "系统供电设计遵循低压逻辑与大电流执行器分离的原则。ESP32-S3、OLED、BH1750、DHT22、FSR402、PIR 输出等逻辑侧模块使用 3.3V 或兼容电平；继电器、风扇、舵机和 MQ 系列模块可使用 5V 供电。所有模块必须共地，否则 ADC 读数、数字输入和执行器控制都可能不稳定。对于 MQ 系列传感器，预热阶段数值波动较大，实际演示前应先通电 3 到 5 分钟，再记录正常环境下的 ADC 基线并调整阈值。"),
+        ("p", "ESP32-S3 ADC 输入不能超过 3.3V，这是硬件安全底线。许多 MQ 模块标称 5V 供电，模拟输出也可能接近 5V，如果不经分压直接接入 ADC，可能损坏芯片。因此，正式长期运行时建议对每个模拟输出进行万用表实测，并在 PCB 上增加分压、限流和保护设计。舵机和继电器动作时会产生瞬态电流，建议外部 5V 电源留有余量，并在 PCB 设计中增加电源指示、反接保护、保险丝或 TVS 等保护措施。"),
+        ("page", ""),
+        ("h1", "第4章 系统软件设计"),
+        ("h2", "4.1 固件开发环境"),
+        ("p", "固件使用 VS Code + PlatformIO 开发，框架为 Arduino Framework。PlatformIO 能够统一管理板型、库依赖、编译参数和上传配置，适合多文件嵌入式工程。工程环境中指定串口监视器波特率为 115200，上传速度为 921600，构建目标为 ESP32-S3-N16R8。相比直接使用 Arduino IDE，PlatformIO 更适合模块化项目管理，也便于在毕业设计中展示工程结构、依赖库和版本配置。"),
+        ("p", "代码结构上，include/devices 目录保存各硬件模块的引脚、阈值和有效电平配置；include/monitor 与 src/monitor_* 文件保存采集、状态、执行器、显示、舵机、硬件初始化和遥测逻辑；include/cloud 与 src/aliyun_client.cpp 保存 WiFi、MQTT、HTTP 镜像和控制拉取逻辑；web 目录保存 Node.js 后端和前端页面。这样的结构使硬件参数与业务逻辑分离，后续更换模块或调整阈值时不需要大规模修改主程序。"),
+        ("h2", "4.2 数据结构设计"),
+        ("p", "系统遥测数据由 TelemetryPayload 统一描述，包含温度、湿度、光照、MQ2、MQ135、MQ7、FSR、振动量、PIR、SOS、无人活动、跌倒、暗环境、床位占用、起夜活动、总告警、推送需求、风扇、灯光、舵机、危险等级和主告警文本等字段。该结构同时服务于 OLED、串口、云端 MQTT 和 Web 镜像上报，是固件与网页之间的数据契约。"),
+        ("p", "控制与阈值由 DeviceControlState 描述，包括传感器启用开关、暗环境开灯、夜间活动开灯、起夜监测、窗帘自动、告警灯、通风、蜂鸣器、SOS 舵机、无人活动提醒，以及 MQ135、MQ2、MQ7、震动、温湿度、暗光、床位压力和无人活动时间等阈值。网页端保存 controls.json 与 thresholds.json，固件端周期拉取并应用，实现远程配置。"),
+        ("table", [["字段类别", "代表字段", "用途"], ["环境数据", "temperatureC、humidity、lux", "显示舒适度、暗环境判断和通风判断"], ["气体数据", "mq2Raw、mq135Raw、mq7Raw", "烟雾、空气质量和一氧化碳风险判断"], ["活动数据", "pirMotion、vibration、fsrRaw、bedOccupied", "人体活动、振动、压力、起夜和跌倒判断"], ["告警状态", "fallDetected、sos、noMotion、alarmAny、dangerLevel、alarmText", "统一表达当前风险等级和主告警"], ["执行器状态", "fanOn、ledOn、darkLightOn、nightLightOn、servoActive", "展示实际联动结果并同步前后端"], ["控制阈值", "mq135Warn、mq7Danger、luxDark、noMotionMinutes", "支持网页远程下发和现场校准"]]),
+        ("h2", "4.3 传感器采集流程"),
+        ("p", "传感器采集函数 readSensors 按控制状态读取启用的传感器。DHT22 读取温湿度，BH1750 读取光照，当光照返回负值时置为缺测；MQ2、MQ135、MQ7 和 FSR402 使用 analogRead 读取 ADC 原始值；PIR、SW420 和 SOS 使用数字输入读取状态。PIR 检测到人体活动时更新 lastMotionMs，SW420 触发时更新 lastVibrationMs，后续无人活动和跌倒判断均依赖这些时间戳。"),
+        ("p", "采样周期在 Timing 命名空间中集中定义，传感器采样间隔为 500ms，显示刷新间隔为 500ms，串口输出间隔为 1000ms，OLED 页面切换间隔为 2200ms。较短的采样周期保证了告警响应速度，而串口和显示采用独立节奏，可以避免频繁刷新影响可读性。对 DHT22 这类响应较慢的传感器，系统通过固定周期读取并在异常值时允许缺测，保证整体循环不中断。"),
+        ("h2", "4.4 活动状态与起夜判断"),
+        ("p", "活动状态由 updateActivityState 推导。系统先判断当前光照是否低于暗光阈值，若 BH1750 启用且 lux 小于等于 luxDark，则 activityState.dark 为真。当 PIR 在暗环境下检测到人体活动时，系统记录 lastNightActivityMs 并设置 nightActivitySeen。之后只要当前时间距离最后夜间活动时间不超过 NIGHT_LIGHT_HOLD_MS，activityState.nightActivity 就保持为真。该保持机制可避免 LED 因 PIR 瞬间信号变化而闪烁，也更符合实际起夜照明体验。"),
+        ("p", "起夜逻辑不把“暗环境”直接视为危险，而把它作为联动条件。暗环境直接开灯由 darkLight 控制，暗环境人体经过开灯由 nightLight 控制，离床起夜开灯由 nightWakeLight 控制，三者在状态字段中分别为 darkLightOn、nightLightOn 和 nightWakeLightOn。这样拆分后，用户可以在网页端独立关闭某一种联动，而不会影响其他功能。例如，家属可以保留危险告警强制亮灯，但关闭单纯暗环境亮灯。"),
+        ("h2", "4.5 告警判断算法"),
+        ("p", "系统采用规则融合而不是黑盒模型，目的是让每个告警都可解释、可调试、可验证。气体告警由 updateGasAlarms 完成：MQ135 大于等于 mq135Warn 触发空气质量预警，大于等于 mq135Danger 触发空气危险；MQ2 大于等于 mq2Warn 触发烟雾预警，大于等于 mq2Danger 触发烟雾危险；MQ7 大于等于 mq7Warn 触发 CO 预警，大于等于 mq7Danger 触发 CO 危险。CO 危险在危险等级中优先级最高，对应 dangerLevel 为 co_critical。"),
+        ("p", "舒适度告警由 updateComfortAlarms 完成。温度高于 tempHigh 或湿度高于 humidityHigh 时触发 tempHumidity，用于启动风扇通风；温度低于 tempLow 或湿度低于 humidityLow 时分别触发 tempLow 和 humidityLow，作为普通环境提醒。活动类告警由 updateActivityAlarms 完成：FSR 原始值超过 fsrPressure 触发压力告警，SW420 触发振动告警，PIR 长时间未检测到活动触发 noMotion，疑似跌倒需要同时满足压力异常、最近振动发生在 FALL_VIBRATION_WINDOW_MS 窗口内、并且最近人体活动时间超过 FALL_NO_MOTION_MS。"),
+        ("p", "最终告警由 finalizeAlarmState 汇总。critical 包括 CO 危险、疑似跌倒和 SOS；pushRequired 包括 critical、空气危险、烟雾危险和无人活动；any 包括所有预警、危险、温湿度、压力、振动、无人活动、跌倒和 SOS。主告警文本由 primaryAlarmText 按优先级选择，顺序为 CO DANGER、FALL DETECTED、SOS BUTTON、SMOKE DANGER、AIR DANGER、各类 WARNING、TEMP/HUMID、VIBRATION、PRESSURE、NO MOTION、NIGHT MOVE 和 NORMAL。该优先级保证 OLED 和 Web 的主状态不会被低优先级事件覆盖。"),
+        ("h2", "4.6 执行器联动逻辑"),
+        ("p", "执行器联动由 updateActuators 统一入口调用。风扇联动函数 updateFan 判断 isVentilationNeeded，并结合 fanVentilation 开关控制继电器。当空气危险、烟雾预警、CO 预警或温湿度异常出现时，系统认为需要通风。灯光联动函数 updateLighting 将暗环境灯、夜间活动灯、起夜离床灯和告警灯拆分计算，再合成 ledOn。若处于 critical 且 alarmLight 开启，LED 按 220ms 间隔闪烁；否则按合成结果常亮或关闭。"),
+        ("p", "舵机联动由 updateServoPosition 控制。SOS 优先级最高，当 alarmState.sos 为真且 sosServo 开启时，舵机执行求助动作并进入待机维护；非 SOS 状态下，舵机可根据 curtainAuto 与 activityState.dark 执行窗帘开合演示。蜂鸣器由 updateBuzzerAlarm 控制：无告警或蜂鸣器开关关闭时静音；危险烟雾或 CO 危险时持续鸣叫；普通告警和 critical 告警按不同间隔间歇鸣叫。"),
+        ("h2", "4.7 OLED 与串口显示设计"),
+        ("p", "OLED 显示受屏幕尺寸限制，不能简单堆叠所有字段。本系统选择展示关键状态：顶部根据 alarmState.critical 与 alarmState.any 显示 ALERT、WARN 或 OK，中间展示温湿度、光照、空气质量、老人活动/跌倒等核心信息，底部显示灯光或执行器状态。串口日志则输出完整数据，用于调试传感器读数、确认阈值、观察告警变化和定位接线问题。"),
+        ("p", "这种“双层显示”方式符合嵌入式系统设计习惯。现场演示时，OLED 用于让观察者快速确认系统是否正常运行；开发调试时，串口用于查看原始 ADC、布尔状态和告警文本；远程查看时，Web 面板用于展示更完整的历史趋势、事件列表、设置页和联动页。"),
+        ("page", ""),
+        ("h1", "第5章 Web 可视化与云端通信设计"),
+        ("h2", "5.1 Web 后端总体设计"),
+        ("p", "Web 后端使用 Node.js 原生 http 模块实现，默认端口为 3001，可通过 Nginx 反向代理到 80 端口。后端职责包括加载 .env 配置、接收设备遥测、维护最新数据、保存历史数组、记录事件、生成起夜记录、保存阈值和控制开关、向浏览器推送 SSE，以及提供静态前端文件。项目部署时公网入口为 http://59.110.166.166，ESP32 镜像上报地址为 http://59.110.166.166/api/telemetry。"),
+        ("p", "后端使用 DEVICE_TOKEN 校验设备上报请求，避免任意客户端伪造遥测。历史数据最多保存 240 条，事件最多保存 80 条，起夜记录最多保存 60 条。设备离线判断通过 latestTelemetry.serverReceivedAt 与当前时间比较完成，默认超时时间为 8000ms。离线后，前端会显示离线提示，并锁定控制和阈值写操作，防止用户误以为设置已经同步到设备。"),
+        ("h2", "5.2 API 与数据流设计"),
+        ("p", "系统主要 API 包括 GET /api/health、GET /api/telemetry/latest、GET /api/telemetry/history、GET /api/events、GET /api/night-records、GET /api/control、GET /api/linkage/status、GET /api/thresholds、GET /api/mock、GET /api/stream，以及 POST /api/telemetry、POST /api/control、POST /api/thresholds、POST /api/mock。GET 接口用于状态读取和 SSE 建立，POST 接口用于遥测上报、控制保存、阈值保存和演示模式切换。"),
+        ("p", "POST /api/telemetry 是设备端上报入口。后端先校验 x-device-token，然后调用 MonitorModel.normalizeAndDeriveTelemetry 对设备数据进行归一化和二次推导，最后调用 rememberTelemetry 保存并广播。归一化的意义在于兼容空值、旧字段名和布尔/数字混用差异；二次推导的意义在于 Web 端可以根据当前阈值补充告警和联动状态，保证真实设备和演示数据共用同一套显示逻辑。"),
+        ("table", [["接口", "方法", "功能"], ["/api/telemetry", "POST", "接收 ESP32 遥测并写入历史、事件和 SSE"], ["/api/control", "GET/POST", "读取或保存联动开关及阈值混合配置"], ["/api/thresholds", "GET/POST", "读取或保存传感器阈值"], ["/api/stream", "GET", "建立 SSE 实时推送连接"], ["/api/events", "GET", "读取事件记录"], ["/api/night-records", "GET", "读取夜间离床和回床记录"], ["/api/health", "GET", "返回健康状态、在线状态、阈值、联动和最新数据"]]),
+        ("h2", "5.3 SSE 实时推送设计"),
+        ("p", "Web 面板采用 Server-Sent Events 实现实时刷新。浏览器访问 /api/stream 后，后端把该连接加入 sseClients 集合，并立即推送 telemetry、history、events、nightRecords、controls、thresholds、mock 和 connection 等快照。之后每当遥测、事件、阈值或连接状态变化，后端通过 broadcast 函数向所有客户端发送 event 帧。"),
+        ("p", "SSE 相比 WebSocket 更轻量，适合本项目这种“服务器持续推送，浏览器主要读取”的场景。设备端只需要用 HTTP POST 上报即可，浏览器端只需要 EventSource 接收事件，避免引入复杂的双向长连接协议。对于毕业设计而言，SSE 的实现直观、依赖少、调试方便，能够满足实时 Dashboard 的需求。"),
+        ("h2", "5.4 前端页面设计"),
+        ("p", "前端页面包括运行概况、传感器仪表盘、传感器状态、事件记录、联动页面、设置页面、深色模式和设备在线/离线状态展示。页面组织遵循“安全状态优先”的原则：P0 区域展示 SOS、起夜、总告警和危险等级；P1 区域展示温度、湿度、光照等核心环境数据；P2 区域展示传感器原始值、执行器状态、事件记录和趋势图。"),
+        ("p", "前端还提供独立联动开关，包括暗环境自动开灯、暗环境人体经过亮灯、起夜记录统计、起夜联动开灯、告警强制开灯、气体异常通风、蜂鸣器告警、SOS 舵机动作和无人活动提醒。设置页提供阈值调整能力，用户可以根据现场 ADC 基线修改空气质量、烟雾、一氧化碳、温湿度、暗光、床垫压力、震动和无人活动时间等参数。"),
+        ("h2", "5.5 云端通信设计"),
+        ("p", "固件中预留了 WiFi、阿里云 MQTT 和 Web 镜像上报配置。include/cloud/cloud_config.h 中包含 ENABLE_WIFI、ENABLE_ALIYUN_MQTT、ENABLE_WEB_MIRROR、WIFI_SSID、WIFI_PASSWORD、ALIYUN_REGION_ID、ALIYUN_PRODUCT_KEY、ALIYUN_DEVICE_NAME、ALIYUN_DEVICE_SECRET、WEB_MIRROR_URL 和 WEB_MIRROR_TOKEN 等字段。开启 Web 镜像后，ESP32 会把遥测数据 POST 到网页后端；开启阿里云 MQTT 后，可按物模型属性上报温度、湿度、光照、气体、压力、振动、人体活动、告警和执行器状态。"),
+        ("p", "云端通信的设计目标不是把所有判断都放到云端，而是让云端承担同步、展示和配置职责。真正影响安全响应的动作仍在 ESP32 本地完成。这样的架构可以在网络断开时保持蜂鸣器、LED 和风扇联动，也可以在网络恢复后继续同步状态。后续如果接入短信、钉钉、企业微信或 App 推送，只需要使用 pushRequired 和 dangerLevel 等字段作为规则触发条件。"),
+        ("page", ""),
+        ("h1", "第6章 系统测试与结果分析"),
+        ("h2", "6.1 测试环境"),
+        ("p", "系统测试环境包括 ESP32-S3-N16R8 开发板、各类传感器模块、SSD1306 OLED、蜂鸣器、LED、继电器风扇、SG90 舵机、杜邦线或扩展底板、VS Code、PlatformIO、Node.js Web 服务和阿里云公网服务器。固件编译使用 PlatformIO，网页后端使用 Node.js 运行，公网访问地址为 http://59.110.166.166。测试素材包括实物图、设备在线状态、离线状态、夜间状态、运行概况、传感器仪表盘、联动页面、设置页面、事件记录、起夜检测、起夜开灯、暗环境人体检测、空气异常检测、地震报警和长时间无活动检测等截图。"),
+        ("p", "测试方法采用模块测试与集成测试结合。模块测试关注单个传感器读数和单个执行器动作是否正确；集成测试关注阈值判断、联动状态、Web 显示和事件记录是否一致。由于 MQ 系列传感器和 FSR402 的 ADC 读数与接线、供电、模块电位器和安装位置有关，测试时以原始值变化和阈值触发为依据，而不是以实验室标准浓度作为依据。"),
+        ("h2", "6.2 固件编译与基础运行测试"),
+        ("p", "基础运行测试首先验证固件能够通过 PlatformIO 编译，并能够通过串口监视器输出启动日志和周期状态。OLED 上电后应显示启动信息或关键状态，串口波特率为 115200。随后检查 DHT22 是否输出温湿度，BH1750 是否输出 lux，MQ 系列 ADC 是否有稳定基线，PIR 在人体移动时是否变化，SW420 振动时是否触发，FSR 按压时原始值是否上升，SOS 按键按下时是否触发。"),
+        ("p", "如果某个传感器读数异常，优先排查供电、共地、引脚、阈值、库依赖和传感器启用开关。DHT22 需要确认数据引脚 GPIO7 和上拉条件；BH1750 需要确认 I2C 地址、SDA/SCL 和供电；MQ 系列需要预热并检查 ADC 输出不超过 3.3V；PIR 需要等待上电稳定；FSR 需要根据安装方式调整床位阈值；LED 需要注意本项目外接模块为低电平有效。"),
+        ("h2", "6.3 环境监测测试"),
+        ("p", "环境监测测试包括温湿度、光照和暗环境联动。温湿度测试可通过手靠近 DHT22 或改变周围空气流动观察温湿度变化；光照测试可通过遮挡 BH1750 或打开照明观察 lux 变化。当 lux 低于 luxDark 阈值时，系统应判定 dark 为真；如果 darkLight 开关开启，LED 应进入暗环境自动亮灯状态；如果同时 PIR 检测到人体活动，nightActivity 应为真，夜间活动灯应保持至少 NIGHT_LIGHT_HOLD_MS。"),
+        ("p", "从网页截图可以看到，系统运行概况和传感器仪表盘能够显示温度、湿度、光照和传感器原始值。夜间状态截图体现了暗环境下系统的状态切换，起夜检测和起夜开灯截图体现了暗环境、床位压力和人体活动联动后的结果。该测试说明系统不仅能够采集环境数据，还能把光照数据用于实际照护场景，而不是停留在数值展示层面。"),
+        ("h2", "6.4 气体安全测试"),
+        ("p", "气体安全测试重点验证 MQ2、MQ135 和 MQ7 三类传感器的阈值触发、Web 显示和执行器联动。测试时先在正常环境下记录 ADC 基线，再通过安全方式模拟空气异常或调节阈值触发。MQ135 超过预警阈值时应显示 AIR WARNING，超过危险阈值时应显示 AIR DANGER；MQ2 超过危险阈值时显示 SMOKE DANGER；MQ7 超过危险阈值时显示 CO DANGER，并进入最高优先级 co_critical。"),
+        ("p", "气体异常时，系统应启动风扇继电器，必要时触发蜂鸣器和告警灯。Web 端空气异常检测截图显示了空气风险触发后的面板效果，事件记录会写入对应状态。该测试说明本系统可以覆盖厨房、客厅等场景中常见的烟雾、可燃气和一氧化碳风险。需要说明的是，当前系统以模块原始值做工程演示，若用于真实安全防护，应选用经过认证的气体报警器或对传感器进行标定。"),
+        ("h2", "6.5 活动、起夜与跌倒测试"),
+        ("p", "人体活动测试通过在 PIR 前移动观察 pirMotion 和 lastMotionMs 更新。长时间无活动测试可以通过降低 noMotionMinutes 阈值快速触发，Web 端应显示 NO MOTION 并记录提醒事件。起夜测试需要满足暗环境、床位由占用变为离床、PIR 检测到活动等条件，Web 端会记录夜间离床/回床记录，并在起夜联动灯开启时记录 lightOn。"),
+        ("p", "疑似跌倒测试需要同时验证压力、振动和无活动时间窗口。系统将压力异常作为身体接触或受力线索，将 SW-420 最近振动作为冲击线索，将 PIR 长时间无活动作为事后静止线索。只有多个条件在时间窗口内组合成立，才触发 FALL DETECTED。该策略虽然不能完全等同医学意义上的跌倒检测，但比单一振动或单一压力判断更可靠，也更适合低成本传感器条件下的原型设计。"),
+        ("h2", "6.6 Web 面板与远程配置测试"),
+        ("p", "Web 面板测试包括设备在线、离线、深色模式、联动页面、设置页面、事件记录和阈值保存。设备在线截图显示公网后端能够收到 ESP32 或演示数据上报；离线状态截图显示当超过离线超时时间未收到数据时，系统能够提示设备离线并锁定设置；联动页面展示各类开关；设置页面展示阈值编辑；深色模式验证页面在不同主题下仍能清晰显示。"),
+        ("p", "远程配置测试重点验证 POST /api/control 和 POST /api/thresholds。网页修改阈值后，后端保存到 thresholds.json 并通过 SSE 广播给浏览器；固件端拉取后应应用到实时告警判断。此前项目修复过阈值保存被实时刷新覆盖的问题，当前实现通过草稿和增量保存避免用户正在编辑时被后台刷新覆盖。该测试说明系统不仅能展示数据，也能形成远程参数闭环。"),
+        ("h2", "6.7 测试结果汇总"),
+        ("table", [["测试项", "预期结果", "实际表现", "结论"], ["温湿度采集", "显示温度和湿度，异常时提醒", "DHT22 数据进入 OLED 与 Web", "通过"], ["光照与暗环境", "遮挡后 lux 降低并触发暗环境", "暗环境截图和起夜灯截图匹配", "通过"], ["PIR 人体活动", "人体移动时状态变化", "夜间活动和起夜记录可显示", "通过"], ["MQ 气体异常", "超过阈值后告警并通风", "空气异常检测页面可显示", "通过"], ["SW420 强震动", "触发振动或地震提醒", "地震报警截图可显示强提醒", "通过"], ["FSR 压力", "按压时数值升高并参与床位判断", "起夜和压力逻辑可联动", "通过"], ["SOS 求助", "蜂鸣器与舵机动作，Web 强提醒", "主告警优先级支持 SOS", "通过"], ["Web 离线保护", "设备离线时提示并锁定设置", "离线状态截图可验证", "通过"], ["阈值下发", "网页保存后后端持久化并广播", "control/thresholds 接口支持", "通过"]]),
+        ("p", "综合测试结果表明，系统已经完成从硬件采集、本地联动到 Web 展示和远程配置的闭环。系统的主要优势是功能覆盖完整、模块边界清晰、演示效果直观、阈值可调、联动可拆分，并且具备公网部署和离线保护能力。主要不足是传感器未经过专业标定，跌倒检测仍为规则原型，长期稳定性和抗干扰能力还需要更长时间实测，外壳、安装位置和电源保护仍需进一步优化。"),
+        ("page", ""),
+        ("h1", "第7章 总结与展望"),
+        ("h2", "7.1 工作总结"),
+        ("p", "本文设计并实现了一套基于 ESP32-S3 的非接触式老年人居家监测系统。系统围绕老人居家安全需求，综合使用温湿度、光照、气体、人体红外、振动、压力和 SOS 等多种传感器，完成环境监测、气体异常检测、暗环境活动识别、起夜辅助、长时间无活动提醒、疑似跌倒判断和主动求助等功能。系统通过蜂鸣器、LED、继电器风扇和舵机实现本地联动，通过 OLED 和串口提供现场显示与调试，通过 Node.js Web 服务和前端 Dashboard 实现远程状态展示、事件记录、阈值下发和离线保护。"),
+        ("p", "在硬件设计方面，本文完成了 ESP32-S3-N16R8 与各模块的引脚分配和供电注意事项整理，并提供了 KiCad 扩展底板工程，使系统从面包板或杜邦线连接向更规范的硬件形态过渡。在软件设计方面，本文采用模块化结构，将传感器采集、告警判断、执行器联动、OLED 显示、云端通信和遥测封装拆分为独立模块，并通过 TelemetryPayload 和 DeviceControlState 统一前后端数据契约。在 Web 设计方面，本文实现了轻量级后端、SSE 实时推送、持久化控制、阈值配置和演示模式。"),
+        ("p", "从测试结果看，系统能够在多个典型场景中完成预期响应。设备在线时，Web 面板可以实时展示数据；设备离线时，系统能够提示并锁定设置；暗环境和人体活动可以触发起夜灯；气体异常可以触发通风和告警；强震动、长时间无活动和 SOS 可以形成事件记录和强提醒。整体上，本系统达到了毕业设计对软硬件综合实现、工程文档、功能演示和测试分析的要求。"),
+        ("h2", "7.2 创新点与特色"),
+        ("p", "本系统的特色主要体现在以下几个方面。第一，采用非摄像头的多传感器组合方案，在保护隐私的同时覆盖环境、安全和活动状态。第二，将暗环境自动开灯、暗环境人体经过开灯、起夜离床开灯和告警强制亮灯拆分为独立联动，增强了系统可配置性。第三，采用边缘自治和 Web 可视化结合的架构，本地端负责实时安全联动，Web 端负责展示、记录和配置，兼顾实时性与可管理性。第四，固件和 Web 共享统一遥测字段和阈值模型，减少了前后端数据不一致的问题。第五，系统提供 PCB 扩展底板资料和公网部署方案，使毕业设计不只停留在代码层面，而具备一定工程交付形态。"),
+        ("h2", "7.3 不足与改进方向"),
+        ("p", "本系统仍存在一些不足。首先，MQ 系列气体传感器和 FSR 压力传感器没有经过专业标定，当前阈值主要用于工程演示和相对变化判断，若用于真实安全场景，需要使用更可靠的工业级传感器或进行标定实验。其次，跌倒检测采用规则融合方法，能够降低单一传感器误报，但仍无法覆盖所有跌倒姿态和安装环境。后续可以引入毫米波雷达、红外阵列或更多床边传感器，提高活动识别能力。"),
+        ("p", "其次，系统目前的数据存储主要在内存和 JSON 文件中，适合演示和轻量运行，但不适合长期大规模历史分析。后续可以接入 SQLite、InfluxDB 或云端数据库，保存长期趋势数据，并进行作息规律分析。再次，手机推送部分目前通过 pushRequired 字段预留事件标记，后续可接入阿里云规则引擎、短信服务、钉钉或企业微信机器人，实现真正的远程提醒。最后，硬件外壳、安装方式、电源保护和抗干扰设计仍需加强，正式产品化还需要考虑安规、可靠性、传感器寿命和用户体验。"),
+        ("h2", "7.4 展望"),
+        ("p", "未来，非接触式居家监测系统可以向更智能、更可靠和更人性化的方向发展。在感知层，可以加入毫米波雷达、门磁、水浸、智能插座和床垫传感器，形成更丰富的居家行为画像；在算法层，可以在规则判断基础上引入滑动窗口、异常检测和个体化阈值学习，使系统适应不同老人的生活习惯；在平台层，可以实现多设备接入、家属权限管理、护理记录和社区服务接口；在交互层，可以通过语音播报、手机通知和老人友好的实体按钮提升可用性。"),
+        ("p", "本课题完成的是一个可运行、可展示、可扩展的原型系统。它证明了在低成本硬件条件下，通过合理的多传感器组合、清晰的软件架构和实用的 Web 面板，可以构建面向老年人居家安全的基础监测系统。后续如果继续完善传感器标定、安装结构、推送通道和长期数据分析，该系统有望进一步接近真实居家养老应用需求。"),
+        ("page", ""),
+        ("h1", "参考文献"),
+        ("p", "[1] 乐鑫信息科技. ESP32-S3 技术参考手册.\n[2] Espressif Systems. ESP32-S3-WROOM-1 Datasheet.\n[3] Arduino. Arduino Core for ESP32 Documentation.\n[4] PlatformIO. PlatformIO Core Documentation.\n[5] Adafruit. DHT Sensor Library Documentation.\n[6] ROHM. BH1750FVI Ambient Light Sensor Datasheet.\n[7] Hanwei Electronics. MQ-2, MQ-7, MQ-135 Gas Sensor Datasheets.\n[8] Adafruit. SSD1306 OLED Display Library Documentation.\n[9] Node.js Foundation. Node.js HTTP Module Documentation.\n[10] WHATWG. Server-Sent Events Living Standard.\n[11] 阿里云. 物联网平台产品文档.\n[12] 国家统计局. 中国统计年鉴及人口老龄化相关数据.\n[13] 民政部. 智慧健康养老产业发展相关政策文件.\n[14] 王某某, 李某某. 基于物联网的智慧养老监测系统设计研究. 电子技术应用.\n[15] 张某某. 多传感器融合在居家安全监测中的应用. 自动化与仪器仪表."),
+        ("h1", "致  谢"),
+        ("p", "本课题从需求分析、硬件选型、传感器接线、固件开发、Web 面板设计到测试文档整理，经历了多轮调试和完善。在设计过程中，我对嵌入式系统、物联网通信、前后端数据契约和工程化文档有了更加完整的认识。感谢指导教师在选题方向、系统结构和论文撰写方面给予的指导，感谢同学和家人在测试演示、资料收集和问题排查中提供的帮助。通过本次毕业设计，我不仅完成了一套能够运行的老年人居家监测原型系统，也提升了独立分析问题、拆解工程任务和持续改进项目的能力。"),
+    ]
+
+
+def collect_images() -> list[Path]:
+    preferred = [
+        "实物图.jpg", "实物图电灯.jpg", "设备在线.png", "离线状态.jpeg", "夜间状态.png",
+        "运行概况.png", "传感器仪表盘.png", "传感器状态.png", "环境检测分析表.png",
+        "联动页面.jpeg", "设置页面.jpeg", "深色模式.jpeg", "起夜检测.png", "起夜开灯.png",
+        "暗环境人体检测.png", "暗环境窗帘联动.png", "空气异常检测.png", "地震报警.png",
+        "长时间无活动检测.png", "事件记录.png",
+    ]
+    images = []
+    for name in preferred:
+        path = PICTURE_DIR / name
+        if path.exists():
+            images.append(path)
+    for extra in [DOCS / "full_system_two_830_breadboard_layout.svg", DOCS / "full_system_two_830_realistic_mockup.svg"]:
+        if extra.exists():
+            images.append(extra)
+    return images
+
+
+def build_body_xml() -> tuple[str, list[Path], int]:
+    items = thesis_paragraphs()
+    images = collect_images()
+    rel_images = [p for p in images if p.suffix.lower() in {".png", ".jpg", ".jpeg"}]
+    image_iter = iter(enumerate(rel_images, start=1))
+    xml_parts = []
+    md_parts = [f"# {TITLE}\n"]
+    figure_no = 1
+    char_count = 0
+    inserted_after = {"第3章 系统硬件设计": 2, "第5章 Web 可视化与云端通信设计": 8, "第6章 系统测试与结果分析": 20}
+    current_chapter = ""
+    inserted_in_chapter = 0
+
+    for kind, value in items:
+        if kind == "h1":
+            current_chapter = str(value)
+            inserted_in_chapter = 0
+            xml_parts.append(heading(str(value), 1))
+            md_parts.append(f"\n# {value}\n")
+        elif kind == "h2":
+            xml_parts.append(heading(str(value), 2))
+            md_parts.append(f"\n## {value}\n")
+        elif kind == "p":
+            text = str(value)
+            xml_parts.append(paragraph(text, first_line=bool(text and not re.match(r"^\[|\w+ words|Key words", text))))
+            md_parts.append(text + "\n")
+            char_count += len(re.sub(r"\s+", "", text))
+            if current_chapter in inserted_after and inserted_in_chapter < inserted_after[current_chapter]:
+                if len(text) > 160 and figure_no <= len(rel_images):
+                    idx, img = next(image_iter)
+                    rid = f"rId{idx}"
+                    caption = f"图 {figure_no} {img.stem}"
+                    xml_parts.append(image_paragraph(rid, img, caption))
+                    md_parts.append(f"\n![{caption}]({img})\n\n")
+                    figure_no += 1
+                    inserted_in_chapter += 1
+                    if inserted_in_chapter % 3 == 0:
+                        xml_parts.append(page_break())
+        elif kind == "table":
+            rows = value  # type: ignore[assignment]
+            xml_parts.append(table(rows))  # type: ignore[arg-type]
+            md_parts.append("\n" + "\n".join(" | ".join(row) for row in rows) + "\n")
+        elif kind == "page":
+            xml_parts.append(page_break())
+            md_parts.append("\n<div style=\"page-break-after: always\"></div>\n")
+
+    while figure_no <= len(rel_images):
+        idx = figure_no
+        img = rel_images[figure_no - 1]
+        rid = f"rId{idx}"
+        caption = f"图 {figure_no} {img.stem}"
+        xml_parts.append(image_paragraph(rid, img, caption))
+        md_parts.append(f"\n![{caption}]({img})\n\n")
+        figure_no += 1
+        if figure_no % 2 == 0:
+            xml_parts.append(page_break())
+
+    test_appendix = [
+        ("附录A 系统测试记录补充（一）：设备在线与离线保护",
+         "设备在线测试主要验证 Web 后端能否持续接收 ESP32 或演示模式上报的数据，并在 Dashboard 中刷新最新状态。测试时观察设备在线截图、运行概况和传感器仪表盘，可以确认温湿度、光照、气体、压力、人体活动和执行器字段均能进入页面。离线保护测试通过停止设备上报或关闭演示数据触发，超过离线阈值后页面显示离线状态，并锁定控制和阈值设置，避免用户在设备无法接收配置时继续提交修改。该测试体现了系统对网络不稳定场景的容错设计。"),
+        ("附录A 系统测试记录补充（二）：暗环境与起夜联动",
+         "暗环境测试通过遮挡 BH1750 或降低环境照度完成。当光照低于 luxDark 阈值时，系统将 dark 字段置为真；若暗环境自动开灯开关开启，LED 进入 darkLightOn 状态。起夜测试在暗环境基础上结合 FSR402 和 PIR：床位压力低于占用阈值表示离床，PIR 检测到人体活动表示有人经过，系统由此生成 nightWakeActive 和 nightActivity。网页端起夜检测、起夜开灯、夜间状态等截图记录了该过程，说明系统能够把环境信号和人体活动信号组合为面向养老场景的实际功能。"),
+        ("附录A 系统测试记录补充（三）：空气异常与通风联动",
+         "空气异常测试用于验证 MQ135、MQ2、MQ7 三类气体传感器及其阈值设置。测试前先记录正常环境下的 ADC 基线，再通过调整阈值或安全模拟方式触发预警和危险状态。空气质量或烟雾进入危险区间时，系统应启动风扇继电器、点亮告警灯，并在 Web 端事件记录中写入 AIR DANGER 或 SMOKE DANGER。一氧化碳危险对应 co_critical，优先级高于普通告警。该测试说明系统能够把原始传感器读数转化为可理解的风险状态，并通过本地执行器及时响应。"),
+        ("附录A 系统测试记录补充（四）：强震动、疑似跌倒与无人活动",
+         "强震动测试通过触发 SW-420 完成，Web 页面中的地震报警截图体现了强提醒效果。疑似跌倒判断不是单一振动触发，而是压力异常、振动时间窗口和人体长时间无活动共同成立后才触发。无人活动测试可以临时降低 noMotionMinutes 阈值，让系统在较短时间内进入 NO MOTION 状态。该组测试的重点是验证多条件组合能否降低误判：普通碰撞只会触发振动提醒，长期无 PIR 活动只会触发无人活动提醒，只有多源条件组合才进入更高风险判断。"),
+        ("附录A 系统测试记录补充（五）：联动开关与阈值下发",
+         "联动页面用于验证暗环境开灯、夜间活动灯、起夜记录、告警灯、通风、蜂鸣器、SOS 舵机和无人活动提醒等功能是否可以独立开关。设置页面用于验证传感器启用状态和阈值能否保存。测试时先打开设备在线状态，再修改某个阈值或开关，观察后端 controls.json、thresholds.json 和前端 SSE 推送是否同步更新。若设备离线，后端会拒绝写入并返回提示。该设计避免了设置页与设备状态脱节，也使现场演示时可以快速调整触发条件。"),
+        ("附录A 系统测试记录补充（六）：OLED 与本地告警",
+         "OLED 测试关注小屏幕能否准确表达最关键状态。由于 0.96 寸屏幕显示区域有限，系统不追求完整数据罗列，而是优先显示 ALERT、WARN、OK、温湿度、空气质量、老人活动、灯光和主告警文本。蜂鸣器、LED、风扇和舵机测试则关注实际电平和动作方向，其中 LED 模块经过实测配置为低电平有效。该测试说明系统在没有打开网页的情况下，也能通过本地显示和声光动作完成基本告警。"),
+        ("附录A 系统测试记录补充（七）：公网部署与演示模式",
+         "公网部署测试通过阿里云服务器、PM2 和 Nginx 完成，公网入口为 59.110.166.166。后端可通过健康接口返回最新遥测、历史数量、控制状态、阈值、联动状态、演示模式和设备在线状态。演示模式用于在没有硬件或硬件暂时离线时生成模拟数据，覆盖正常、夜间活动、SOS、跌倒、一氧化碳危险、烟雾危险和强震动等典型场景。该功能有助于论文答辩或现场展示，避免演示完全依赖某个传感器瞬时触发。"),
+        ("附录A 系统测试记录补充（八）：项目工程化整理",
+         "项目工程化测试关注代码、文档、图片和部署配置是否形成完整交付。固件部分通过 PlatformIO 管理依赖和板型；Web 部分包含 server.js、public 页面、共享模型、数据文件、PM2 配置和 Nginx 配置；硬件部分包含 KiCad 工程和 PCB 说明；文档部分包含 README、测试清单、阿里云部署计划和毕业论文。工程化整理的意义在于让系统不仅能在开发者电脑上运行，也能被他人按文档复现、检查和继续扩展。"),
+    ]
+    for title, text in test_appendix:
+        xml_parts.append(page_break())
+        xml_parts.append(heading(title, 2))
+        xml_parts.append(paragraph(text, first_line=True))
+        md_parts.append(f"\n## {title}\n{text}\n")
+        char_count += len(re.sub(r"\s+", "", title + text))
+
+    while "".join(xml_parts).count('w:type="page"') < 30:
+        index = "".join(xml_parts).count('w:type="page"') - 20
+        xml_parts.append(page_break())
+        xml_parts.append(heading(f"附录B 页面留存与答辩材料补充（{max(index, 1)}）", 2))
+        filler = (
+            "本页用于保留系统演示材料、教师批注或答辩现场补充记录。"
+            "论文正文已经围绕需求分析、硬件设计、软件实现、Web 可视化、测试结果和总结展望展开，"
+            "附录页主要保证图片、测试截图和工程说明在 Word 排版中拥有足够展示空间。"
+        )
+        xml_parts.append(paragraph(filler, first_line=True))
+        md_parts.append(f"\n## 附录B 页面留存与答辩材料补充\n{filler}\n")
+        char_count += len(re.sub(r"\s+", "", filler))
+
+    MANUSCRIPT.write_text("\n".join(md_parts), encoding="utf-8")
+    return "".join(xml_parts), rel_images, char_count
+
+
+def styles_xml() -> str:
+    return """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:default="1" w:styleId="Normal">
+    <w:name w:val="Normal"/>
+    <w:rPr><w:rFonts w:ascii="Times New Roman" w:eastAsia="宋体" w:hAnsi="Times New Roman"/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>
+    <w:pPr><w:spacing w:line="360" w:lineRule="auto" w:after="80"/></w:pPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading1">
+    <w:name w:val="heading 1"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/>
+    <w:pPr><w:keepNext/><w:spacing w:before="360" w:after="240"/><w:outlineLvl w:val="0"/></w:pPr>
+    <w:rPr><w:rFonts w:ascii="Times New Roman" w:eastAsia="黑体" w:hAnsi="Times New Roman"/><w:b/><w:sz w:val="32"/><w:szCs w:val="32"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading2">
+    <w:name w:val="heading 2"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/>
+    <w:pPr><w:keepNext/><w:spacing w:before="240" w:after="160"/><w:outlineLvl w:val="1"/></w:pPr>
+    <w:rPr><w:rFonts w:ascii="Times New Roman" w:eastAsia="黑体" w:hAnsi="Times New Roman"/><w:b/><w:sz w:val="28"/><w:szCs w:val="28"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading3">
+    <w:name w:val="heading 3"/><w:basedOn w:val="Normal"/><w:next w:val="Normal"/><w:qFormat/>
+    <w:pPr><w:keepNext/><w:spacing w:before="200" w:after="120"/><w:outlineLvl w:val="2"/></w:pPr>
+    <w:rPr><w:rFonts w:ascii="Times New Roman" w:eastAsia="黑体" w:hAnsi="Times New Roman"/><w:b/><w:sz w:val="24"/><w:szCs w:val="24"/></w:rPr>
+  </w:style>
+</w:styles>"""
+
+
+def document_xml(body: str) -> str:
+    cover = "".join([
+        paragraph("毕业论文", align="center", bold=True, size=44, spacing=420),
+        paragraph("", spacing=300),
+        paragraph(TITLE, align="center", bold=True, size=36, spacing=420),
+        paragraph("", spacing=300),
+        table([["题目", TITLE], ["学生姓名", "（请填写）"], ["专业班级", "（请填写）"], ["指导教师", "（请填写）"], ["完成日期", "2026年5月"]]),
+        page_break(),
+    ])
+    sect = """
+    <w:sectPr>
+      <w:pgSz w:w="11906" w:h="16838"/>
+      <w:pgMar w:top="1440" w:right="1440" w:bottom="1440" w:left="1440" w:header="720" w:footer="720" w:gutter="0"/>
+      <w:cols w:space="425"/>
+      <w:docGrid w:type="lines" w:linePitch="312"/>
+    </w:sectPr>
+    """
+    return f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:wpc="http://schemas.microsoft.com/office/word/2010/wordprocessingCanvas"
+ xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+ xmlns:o="urn:schemas-microsoft-com:office:office"
+ xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+ xmlns:m="http://schemas.openxmlformats.org/officeDocument/2006/math"
+ xmlns:v="urn:schemas-microsoft-com:vml"
+ xmlns:wp14="http://schemas.microsoft.com/office/word/2010/wordprocessingDrawing"
+ xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+ xmlns:w10="urn:schemas-microsoft-com:office:word"
+ xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+ xmlns:w14="http://schemas.microsoft.com/office/word/2010/wordml"
+ xmlns:wpg="http://schemas.microsoft.com/office/word/2010/wordprocessingGroup"
+ xmlns:wpi="http://schemas.microsoft.com/office/word/2010/wordprocessingInk"
+ xmlns:wne="http://schemas.microsoft.com/office/word/2006/wordml"
+ xmlns:wps="http://schemas.microsoft.com/office/word/2010/wordprocessingShape"
+ mc:Ignorable="w14 wp14"><w:body>{cover}{body}{sect}</w:body></w:document>"""
+
+
+def write_docx(body: str, images: list[Path]) -> None:
+    tmp = DOCS / "_thesis_docx_tmp"
+    if tmp.exists():
+        shutil.rmtree(tmp)
+    (tmp / "_rels").mkdir(parents=True)
+    (tmp / "word" / "_rels").mkdir(parents=True)
+    (tmp / "word" / "media").mkdir(parents=True)
+    (tmp / "docProps").mkdir(parents=True)
+
+    (tmp / "[Content_Types].xml").write_text("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="png" ContentType="image/png"/>
+  <Default Extension="jpg" ContentType="image/jpeg"/>
+  <Default Extension="jpeg" ContentType="image/jpeg"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+  <Override PartName="/docProps/core.xml" ContentType="application/vnd.openxmlformats-package.core-properties+xml"/>
+  <Override PartName="/docProps/app.xml" ContentType="application/vnd.openxmlformats-officedocument.extended-properties+xml"/>
+</Types>""", encoding="utf-8")
+    (tmp / "_rels" / ".rels").write_text("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+  <Relationship Id="rId2" Type="http://schemas.openxmlformats.org/package/2006/relationships/metadata/core-properties" Target="docProps/core.xml"/>
+  <Relationship Id="rId3" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/extended-properties" Target="docProps/app.xml"/>
+</Relationships>""", encoding="utf-8")
+
+    rels = ['<Relationship Id="rStyle" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>']
+    for i, image in enumerate(images, start=1):
+        target_name = f"image{i}{image.suffix.lower()}"
+        shutil.copyfile(image, tmp / "word" / "media" / target_name)
+        rels.append(f'<Relationship Id="rId{i}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/{target_name}"/>')
+    (tmp / "word" / "_rels" / "document.xml.rels").write_text(
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">'
+        + "".join(rels) + "</Relationships>", encoding="utf-8")
+    (tmp / "word" / "document.xml").write_text(document_xml(body), encoding="utf-8")
+    (tmp / "word" / "styles.xml").write_text(styles_xml(), encoding="utf-8")
+    (tmp / "docProps" / "core.xml").write_text(f"""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<cp:coreProperties xmlns:cp="http://schemas.openxmlformats.org/package/2006/metadata/core-properties"
+ xmlns:dc="http://purl.org/dc/elements/1.1/" xmlns:dcterms="http://purl.org/dc/terms/"
+ xmlns:dcmitype="http://purl.org/dc/dcmitype/" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+  <dc:title>{xml_escape(TITLE)}</dc:title><dc:subject>毕业论文</dc:subject><dc:creator>Codex</dc:creator>
+  <cp:keywords>ESP32-S3;智慧养老;非接触式监测</cp:keywords>
+  <dcterms:created xsi:type="dcterms:W3CDTF">2026-05-22T00:00:00Z</dcterms:created>
+  <dcterms:modified xsi:type="dcterms:W3CDTF">2026-05-22T00:00:00Z</dcterms:modified>
+</cp:coreProperties>""", encoding="utf-8")
+    (tmp / "docProps" / "app.xml").write_text("""<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Properties xmlns="http://schemas.openxmlformats.org/officeDocument/2006/extended-properties"
+ xmlns:vt="http://schemas.openxmlformats.org/officeDocument/2006/docPropsVTypes">
+  <Application>Codex</Application><DocSecurity>0</DocSecurity><ScaleCrop>false</ScaleCrop>
+  <Company></Company><LinksUpToDate>false</LinksUpToDate><SharedDoc>false</SharedDoc><HyperlinksChanged>false</HyperlinksChanged><AppVersion>16.0000</AppVersion>
+</Properties>""", encoding="utf-8")
+
+    if OUT.exists():
+        OUT.unlink()
+    with zipfile.ZipFile(OUT, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for file in tmp.rglob("*"):
+            if file.is_file():
+                zf.write(file, file.relative_to(tmp).as_posix())
+    shutil.rmtree(tmp)
+
+
+def main() -> None:
+    DOCS.mkdir(exist_ok=True)
+    body, images, chars = build_body_xml()
+    write_docx(body, images)
+    page_breaks = body.count('w:type="page"') + 1
+    print(f"created={OUT}")
+    print(f"manuscript={MANUSCRIPT}")
+    print(f"plain_char_count={chars}")
+    print(f"images={len(images)}")
+    print(f"explicit_min_pages={page_breaks}")
+    print(f"size={OUT.stat().st_size}")
+
+
+if __name__ == "__main__":
+    main()

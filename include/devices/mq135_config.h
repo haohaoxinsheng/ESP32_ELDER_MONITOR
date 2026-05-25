@@ -1,3 +1,4 @@
+// MQ-135 空气质量传感器配置：定义 ADC 引脚和空气质量阈值。
 #pragma once
 
 #include <Arduino.h>

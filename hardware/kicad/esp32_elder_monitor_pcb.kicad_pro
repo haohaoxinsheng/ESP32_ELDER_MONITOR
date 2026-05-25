@@ -1,4 +1,5 @@
 {
+  "_comment": "KiCad 工程配置：保存 ESP32 老人监测载板项目的原理图、PCB 和设计规则入口。",
   "board": {
     "design_settings": {
       "defaults": {

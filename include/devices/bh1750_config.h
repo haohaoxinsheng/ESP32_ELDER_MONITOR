@@ -1,3 +1,4 @@
+// BH1750 光照传感器配置：定义 I2C 引脚、地址和暗环境阈值。
 #pragma once
 
 #include <Arduino.h>

@@ -1,3 +1,4 @@
+<!-- 系统装配示意 SVG：展示两块 830 面包板上的 ESP32、传感器、执行器和电源分区摆放。 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1150" viewBox="0 0 1800 1150" role="img" aria-labelledby="title desc">
   <title id="title">两块 830 面包板真实装配效果图</title>
   <desc id="desc">ESP32-S3 老人监测系统在两块 830 面包板上的仿真实物摆放效果，包括传感器、执行器和电源分区。</desc>

@@ -1,3 +1,4 @@
+; KiCad 原理图：记录 ESP32-S3 老人监测载板的连接器和接口说明。
 (kicad_sch (version 20230121) (generator "codex")
   (uuid 1c093014-86e5-4d00-9348-1ea01c38ab86)
   (paper "A4")

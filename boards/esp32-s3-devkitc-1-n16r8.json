@@ -1,4 +1,5 @@
 {
+  "_comment": "PlatformIO 自定义开发板配置：描述 ESP32-S3 DevKitC-1 N16R8 的 Flash、PSRAM、上传和调试参数。",
   "build": {
     "arduino": {
       "ldscript": "esp32s3_out.ld",

@@ -1,3 +1,4 @@
+// FSR402 压力传感器配置：定义 ADC 引脚、床位占用和压力告警阈值。
 #pragma once
 
 #include <Arduino.h>

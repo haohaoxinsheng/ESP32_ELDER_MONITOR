@@ -1,3 +1,4 @@
+/* 兼容样式入口：保留旧版单文件样式入口，实际页面主要使用 styles 目录下的分层样式。 */
 @import url("./styles/base.css");
 @import url("./styles/layout.css");
 @import url("./styles/components.css");

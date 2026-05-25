@@ -1,9 +1,12 @@
+// 遥测输出实现：打印串口调试日志，并组装云端/Web 使用的 TelemetryPayload。
 #include "monitor/monitor_telemetry.h"
 
 #include "cloud/aliyun_client.h"
+#include "monitor/monitor_servo.h"
 #include "monitor/monitor_state.h"
 
 namespace Monitor {
+// 串口调试输出：把关键传感器、告警、执行器和网络状态压成一行。
 void printSerialLog() {
   Serial.print(F("tempC="));
   Serial.print(data.temperatureC);
@@ -31,6 +34,8 @@ void printSerialLog() {
   Serial.print(data.vibration);
   Serial.print(F(",sos="));
   Serial.print(data.sos);
+  Serial.print(F(",noMotion="));
+  Serial.print(alarmState.noMotion);
   Serial.print(F(",fall="));
   Serial.print(alarmState.fallDetected);
   Serial.print(F(",level="));
@@ -39,12 +44,15 @@ void printSerialLog() {
   Serial.print(primaryAlarmText());
   Serial.print(F(",buzzer="));
   Serial.print(buzzerOn);
+  Serial.print(F(",servoActive="));
+  Serial.print(ServoDrive::isActive());
   Serial.print(F(",wifi="));
   Serial.print(AliyunClient::isWifiConnected());
   Serial.print(F(",mqtt="));
   Serial.println(AliyunClient::isMqttConnected());
 }
 
+// 组装标准遥测载荷，保证固件、云端镜像和 Web 面板字段一致。
 TelemetryPayload buildTelemetryPayload() {
   TelemetryPayload payload;
   payload.temperatureC = data.temperatureC;
@@ -58,6 +66,7 @@ TelemetryPayload buildTelemetryPayload() {
   payload.pirMotion = data.pirMotion;
   payload.vibration = data.vibration;
   payload.sos = data.sos;
+  payload.noMotion = alarmState.noMotion;
   payload.fallDetected = alarmState.fallDetected;
   payload.dark = activityState.dark;
   const DeviceControlState& controls = AliyunClient::controlState();
@@ -72,6 +81,7 @@ TelemetryPayload buildTelemetryPayload() {
   payload.nightLightOn = nightLightOn;
   payload.nightWakeLightOn = nightWakeLightOn;
   payload.alarmLightOn = alarmLightOn;
+  payload.servoActive = ServoDrive::isActive();
   payload.dangerLevel = dangerLevelText();
   payload.alarmText = primaryAlarmText();
   return payload;

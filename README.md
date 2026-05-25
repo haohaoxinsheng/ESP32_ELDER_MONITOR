@@ -1,3 +1,4 @@
+<!-- 项目总览文档：说明 ESP32 老人居家监测系统的功能、硬件、固件、Web 面板和部署方式。 -->
 # 非接触式老年人居家监测系统（ESP32-S3）
 
 本项目用于毕业设计的软件部分，开发环境为 VS Code + PlatformIO，必要时也可以把 `src/main.cpp` 拷贝到 Arduino IDE 使用。
@@ -72,7 +73,8 @@ pio device monitor -b 115200
 - `include/devices/pir_config.h`：PIR 人体红外输出引脚。
 - `include/devices/sw420_config.h`：SW420 振动输出引脚。
 - `include/devices/sos_button_config.h`：SOS 按键引脚和消抖时间。
-- `include/devices/actuator_config.h`：蜂鸣器、风扇继电器、LED、舵机引脚和舵机角度。
+- `include/devices/actuator_config.h`：蜂鸣器、风扇继电器和 LED 引脚/极性。
+- `include/devices/servo_config.h`：360 舵机 PWM 引脚、停止角和各联动脉冲时长。
 - `include/config.h`：采样周期、显示周期、起夜灯保持时间、无人活动告警时间等系统级时间参数。
 
 MQ135、MQ7、FSR402、震动量在不同接线和模块电位器状态下原始值会不同，建议先打开串口监视器记录正常环境下的数值，再把阈值调到“正常值上方一段距离”。
@@ -98,11 +100,11 @@ MQ135、MQ7、FSR402、震动量在不同接线和模块电位器状态下原始
 - `ENABLE_WIFI`：改为 `true` 后启用 WiFi。
 - `ENABLE_ALIYUN_MQTT`：改为 `true` 后启用阿里云 MQTT 属性上报。
 - `ENABLE_WEB_MIRROR`：改为 `true` 后同时把数据 POST 给网页后端。
-- `WIFI_SSID` / `WIFI_PASSWORD`：填写路由器 WiFi。
+- `WIFI_SSID` / `WIFI_PASSWORD`：复制 `include/cloud/cloud_secrets.example.h` 为 `include/cloud/cloud_secrets.h` 后填写路由器 WiFi。
 - `ALIYUN_REGION_ID`：填写阿里云物联网平台地域，例如 `cn-shanghai`。
-- `ALIYUN_PRODUCT_KEY` / `ALIYUN_DEVICE_NAME` / `ALIYUN_DEVICE_SECRET`：填写设备三元组。
+- `ALIYUN_PRODUCT_KEY` / `ALIYUN_DEVICE_NAME` / `ALIYUN_DEVICE_SECRET`：在 `include/cloud/cloud_secrets.h` 中填写设备三元组。
 - `WEB_MIRROR_URL`：填写网页后端地址，当前阿里云地址为 `http://59.110.166.166/api/telemetry`。
-- `WEB_MIRROR_TOKEN`：和网页后端 `.env` 里的 `DEVICE_TOKEN` 保持一致。
+- `WEB_MIRROR_TOKEN`：在 `include/cloud/cloud_secrets.h` 中填写，并和网页后端 `.env` 里的 `DEVICE_TOKEN` 保持一致。
 
 阿里云物模型建议添加以下属性标识符：
 
@@ -150,7 +152,7 @@ npm start
 http://59.110.166.166
 ```
 
-如果要先看演示效果，可以把 `.env` 中 `ENABLE_MOCK=false` 改成 `ENABLE_MOCK=true`，网页会自动生成模拟数据。
+如果要先看演示效果，可以把 `.env` 中 `ENABLE_MOCK=false` 改成 `ENABLE_MOCK=true`，网页会读取 `web/data/demo-data.json` 中的静态演示数据。也可以在设置页的“静态演示数据”区域直接修改温湿度、气体、PIR、SOS、跌倒和演示风扇状态。
 
 网页界面按展示优先级组织：
 

@@ -1,10 +1,10 @@
+// 运行状态声明：集中暴露传感器数据、告警状态、活动状态、定时器和执行器状态。
 #pragma once
 
 #include <Arduino.h>
 #include <Adafruit_SSD1306.h>
 #include <BH1750.h>
 #include <DHT.h>
-#include <ESP32Servo.h>
 #include <Wire.h>
 
 #include "telemetry_payload.h"
@@ -53,7 +53,6 @@ extern Adafruit_SSD1306 display;
 extern BH1750 lightMeter;
 extern TwoWire bh1750Wire;
 extern DHT dht;
-extern Servo servo;
 
 extern SensorData data;
 extern AlarmState alarmState;

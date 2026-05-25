@@ -1,3 +1,4 @@
+// MQ-7 一氧化碳传感器配置：定义 ADC 引脚和 CO 预警/危险阈值。
 #pragma once
 
 #include <Arduino.h>

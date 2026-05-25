@@ -1,3 +1,4 @@
+// 云端通信实现：负责 WiFi/MQTT 连接、阿里云属性上报、Web 镜像上报和控制参数拉取。
 #include "cloud/aliyun_client.h"
 
 #include <ArduinoJson.h>
@@ -19,6 +20,7 @@ uint32_t messageId = 1;
 bool wifiStarted = false;
 DeviceControlState deviceControl;
 
+// 把二进制签名结果转成阿里云 MQTT 鉴权需要的小写十六进制字符串。
 String hexEncode(const uint8_t* data, size_t length) {
   static const char* hex = "0123456789abcdef";
   String out;
@@ -30,6 +32,7 @@ String hexEncode(const uint8_t* data, size_t length) {
   return out;
 }
 
+// 生成 HMAC-SHA256 签名，用于拼装阿里云 MQTT 密码。
 String hmacSha256Hex(const String& content, const char* secret) {
   uint8_t digest[32] = {0};
   const mbedtls_md_info_t* mdInfo = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
@@ -42,24 +45,29 @@ String hmacSha256Hex(const String& content, const char* secret) {
   return hexEncode(digest, sizeof(digest));
 }
 
+// 阿里云 MQTT 接入域名由 productKey 和地域拼接生成。
 String mqttHost() {
   return String(CloudConfig::ALIYUN_PRODUCT_KEY) + ".iot-as-mqtt." +
          CloudConfig::ALIYUN_REGION_ID + ".aliyuncs.com";
 }
 
+// 设备基础 ClientId，签名计算和实际连接参数都会复用。
 String mqttBaseClientId() {
   return String(CloudConfig::ALIYUN_PRODUCT_KEY) + "." + CloudConfig::ALIYUN_DEVICE_NAME;
 }
 
+// 按阿里云 securemode=2 格式生成带时间戳和签名方式的 ClientId。
 String mqttClientId(const String& timestamp) {
   return mqttBaseClientId() + "|securemode=2,signmethod=hmacsha256,timestamp=" +
          timestamp + "|";
 }
 
+// MQTT 用户名格式固定为 deviceName&productKey。
 String mqttUsername() {
   return String(CloudConfig::ALIYUN_DEVICE_NAME) + "&" + CloudConfig::ALIYUN_PRODUCT_KEY;
 }
 
+// MQTT 密码是对 clientId/deviceName/productKey/timestamp 的 HMAC 签名。
 String mqttPassword(const String& timestamp) {
   const String clientId = mqttBaseClientId();
   const String content = "clientId" + clientId + "deviceName" +
@@ -68,11 +76,13 @@ String mqttPassword(const String& timestamp) {
   return hmacSha256Hex(content, CloudConfig::ALIYUN_DEVICE_SECRET);
 }
 
+// 阿里云物模型属性上报 Topic。
 String propertyPostTopic() {
   return String("/sys/") + CloudConfig::ALIYUN_PRODUCT_KEY + "/" +
          CloudConfig::ALIYUN_DEVICE_NAME + "/thing/event/property/post";
 }
 
+// JSON 中写入可空浮点值，传感器未读到时用 null 表示。
 void addFinite(JsonObject params, const char* key, float value) {
   if (isnan(value)) {
     params[key] = nullptr;
@@ -81,6 +91,7 @@ void addFinite(JsonObject params, const char* key, float value) {
   }
 }
 
+// 顶层 JSON 写入可空浮点值，Web 镜像数据复用。
 void setFinite(JsonDocument& doc, const char* key, float value) {
   if (isnan(value)) {
     doc[key] = nullptr;
@@ -131,6 +142,7 @@ bool readBoolControl(const JsonDocument& doc, const char* key, bool current) {
   return doc[key].as<bool>();
 }
 
+// 保证网页下发阈值的上下限顺序正确，避免 warn 高于 danger 造成误判。
 void normalizeControlThresholds() {
   if (deviceControl.mq135Warn > deviceControl.mq135Danger) {
     const uint16_t swap = deviceControl.mq135Warn;
@@ -159,6 +171,7 @@ void normalizeControlThresholds() {
   }
 }
 
+// 构造阿里云 Alink 物模型属性上报 payload。
 String buildAlinkPayload(const TelemetryPayload& payload) {
   JsonDocument doc;
   doc["id"] = String(messageId++);
@@ -177,6 +190,7 @@ String buildAlinkPayload(const TelemetryPayload& payload) {
   params["Motion"] = payload.pirMotion ? 1 : 0;
   params["Vibration"] = payload.vibration ? 1 : 0;
   params["Sos"] = payload.sos ? 1 : 0;
+  params["NoMotion"] = payload.noMotion ? 1 : 0;
   params["FallDetected"] = payload.fallDetected ? 1 : 0;
   params["Dark"] = payload.dark ? 1 : 0;
   params["BedOccupied"] = payload.bedOccupied ? 1 : 0;
@@ -190,6 +204,7 @@ String buildAlinkPayload(const TelemetryPayload& payload) {
   params["NightLightOn"] = payload.nightLightOn ? 1 : 0;
   params["NightWakeLightOn"] = payload.nightWakeLightOn ? 1 : 0;
   params["AlarmLightOn"] = payload.alarmLightOn ? 1 : 0;
+  params["ServoActive"] = payload.servoActive ? 1 : 0;
   params["DangerLevel"] = payload.dangerLevel;
   params["AlarmText"] = payload.alarmText;
 
@@ -198,6 +213,7 @@ String buildAlinkPayload(const TelemetryPayload& payload) {
   return output;
 }
 
+// 构造 Web 镜像 payload，字段名直接对应 dashboard 共享模型。
 String buildMirrorPayload(const TelemetryPayload& payload) {
   JsonDocument doc;
   doc["deviceName"] = CloudConfig::ALIYUN_DEVICE_NAME;
@@ -213,6 +229,7 @@ String buildMirrorPayload(const TelemetryPayload& payload) {
   doc["pirMotion"] = payload.pirMotion;
   doc["vibration"] = payload.vibration;
   doc["sos"] = payload.sos;
+  doc["noMotion"] = payload.noMotion;
   doc["fallDetected"] = payload.fallDetected;
   doc["dark"] = payload.dark;
   doc["bedOccupied"] = payload.bedOccupied;
@@ -226,6 +243,7 @@ String buildMirrorPayload(const TelemetryPayload& payload) {
   doc["nightLightOn"] = payload.nightLightOn;
   doc["nightWakeLightOn"] = payload.nightWakeLightOn;
   doc["alarmLightOn"] = payload.alarmLightOn;
+  doc["servoActive"] = payload.servoActive;
   doc["dangerLevel"] = payload.dangerLevel;
   doc["alarmText"] = payload.alarmText;
   doc["uptimeMs"] = millis();
@@ -263,6 +281,7 @@ String buildMirrorPayload(const TelemetryPayload& payload) {
   return output;
 }
 
+// 首次或断线后连接 WiFi，超时后允许下一轮重新尝试。
 void connectWifi() {
   if (!CloudConfig::ENABLE_WIFI || WiFi.status() == WL_CONNECTED || wifiStarted) {
     return;
@@ -289,6 +308,7 @@ void connectWifi() {
   }
 }
 
+// 按退避间隔重连阿里云 MQTT，避免主循环高频阻塞。
 void reconnectMqtt() {
   if (!CloudConfig::ENABLE_ALIYUN_MQTT || WiFi.status() != WL_CONNECTED ||
       mqttClient.connected()) {
@@ -315,6 +335,7 @@ void reconnectMqtt() {
   }
 }
 
+// 向 Web 服务镜像上报遥测，供公网 dashboard 实时显示。
 void postMirror(const String& payload) {
   if (!CloudConfig::ENABLE_WEB_MIRROR || WiFi.status() != WL_CONNECTED) {
     return;
@@ -331,6 +352,7 @@ void postMirror(const String& payload) {
   http.end();
 }
 
+// 应用 Web 下发的联动开关和阈值，并做范围约束。
 void applyControlJson(const JsonDocument& doc) {
   deviceControl.enableDht22 = readBoolControl(doc, "enableDht22", deviceControl.enableDht22);
   deviceControl.enableBh1750 = readBoolControl(doc, "enableBh1750", deviceControl.enableBh1750);
@@ -373,6 +395,7 @@ void applyControlJson(const JsonDocument& doc) {
 }  // namespace
 
 namespace AliyunClient {
+// 初始化云端客户端：连接 WiFi，配置 TLS MQTT 客户端和缓冲区。
 void begin() {
   if (!CloudConfig::ENABLE_WIFI) {
     return;
@@ -384,6 +407,7 @@ void begin() {
   mqttClient.setBufferSize(1024);
 }
 
+// 云端循环：维护 WiFi/MQTT 连接并周期拉取 Web 控制状态。
 void loop() {
   if (!CloudConfig::ENABLE_WIFI) {
     return;
@@ -399,6 +423,7 @@ void loop() {
   pullControlState();
 }
 
+// 发布一次遥测：始终先发 Web 镜像，启用 MQTT 时再发阿里云物模型。
 bool publishTelemetry(const TelemetryPayload& payload) {
   if (!CloudConfig::ENABLE_WIFI) {
     return false;
@@ -418,6 +443,7 @@ bool publishTelemetry(const TelemetryPayload& payload) {
   return ok;
 }
 
+// 从 Web 服务拉取最新控制和阈值，作为设备端本地联动依据。
 bool pullControlState() {
   if (!CloudConfig::ENABLE_WEB_MIRROR || WiFi.status() != WL_CONNECTED) {
     return false;

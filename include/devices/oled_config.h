@@ -1,3 +1,4 @@
+// OLED 屏幕配置：定义 SSD1306 尺寸、I2C 地址和接线引脚。
 #pragma once
 
 #include <Arduino.h>

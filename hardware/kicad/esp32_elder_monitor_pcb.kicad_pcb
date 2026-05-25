@@ -1,3 +1,4 @@
+; KiCad PCB 文件：记录载板外形、排针、丝印和布线布局。
 (kicad_pcb (version 20221018) (generator "codex")
 
   (general (thickness 1.6))

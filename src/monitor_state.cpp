@@ -1,3 +1,4 @@
+// 全局运行状态实现：保存传感器对象、告警状态、执行器状态，并提供主要状态判断函数。
 #include "monitor/monitor_state.h"
 
 #include "devices/dht22_config.h"
@@ -8,7 +9,6 @@ Adafruit_SSD1306 display(OledConfig::WIDTH, OledConfig::HEIGHT, &Wire, OledConfi
 BH1750 lightMeter;
 TwoWire bh1750Wire(1);
 DHT dht(Dht22Config::DATA_PIN, Dht22Config::TYPE);
-Servo servo;
 
 SensorData data;
 AlarmState alarmState;
@@ -41,15 +41,18 @@ bool nightLightOn = false;
 bool nightWakeLightOn = false;
 bool alarmLightOn = false;
 
+// 床位占用判断：FSR 达到床位阈值时认为老人仍在床上。
 bool isBedOccupied(const DeviceControlState& controls) {
   return controls.enableFsr && data.fsrRaw >= controls.bedPresenceRaw;
 }
 
+// 通风需求判断：气体危险、烟雾/CO 预警或温湿度异常都会触发风扇。
 bool isVentilationNeeded() {
   return alarmState.airDanger || alarmState.smokeWarning ||
          alarmState.coWarning || alarmState.tempHumidity;
 }
 
+// 选择当前最重要的告警文案，顺序决定 OLED、串口和 Web 的主状态。
 const char* primaryAlarmText() {
   if (alarmState.coDanger) return "CO DANGER";
   if (alarmState.fallDetected) return "FALL DETECTED";
@@ -69,6 +72,7 @@ const char* primaryAlarmText() {
   return "NORMAL";
 }
 
+// 选择当前危险等级，供 Web 面板着色和强提醒逻辑使用。
 const char* dangerLevelText() {
   if (alarmState.coDanger) return "co_critical";
   if (alarmState.fallDetected || alarmState.sos) return "critical";

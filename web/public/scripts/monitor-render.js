@@ -30,11 +30,11 @@
 
   // 汇总告警态样式，统一控制顶部和主状态卡的视觉反馈。
   function renderStatusClasses(data, activeCritical, muted) {
-    toggleClass('statusPanel', 'warn', Boolean(data.alarmAny || data.sos));
+    toggleClass('statusPanel', 'warn', Boolean(data.alarmAny || data.sos || data.noMotion));
     toggleClass('statusPanel', 'critical', activeCritical);
     toggleClass('statusPanel', 'offline', !state.deviceOnline && Boolean(data));
     toggleSelectorClass('.topbar', 'critical-active', activeCritical);
-    toggleClass('alertStrip', 'warning', Boolean((data.alarmAny || muted) && !activeCritical));
+    toggleClass('alertStrip', 'warning', Boolean((data.alarmAny || data.noMotion || muted) && !activeCritical));
     toggleClass('alertStrip', 'danger', activeCritical);
     toggleClass('alertStrip', 'offline', !state.deviceOnline && Boolean(data));
   }
@@ -72,7 +72,7 @@
     setText('ledOn', onOff(effectiveLed(data)));
     setText('fanOn', onOff(effectiveFan(data)));
     setText('buzzerOn', onOff(effectiveBuzzer(data)));
-    setText('servoOn', effectiveServo(data) ? '动作' : '复位');
+    setText('servoOn', effectiveServo(data) ? '动作' : '待机');
     setText('curtainOn', status.curtain ? '关闭' : status.curtainOpen ? '打开' : '待机');
   }
 
@@ -100,20 +100,21 @@
     }
 
     if (critical) {
-      setText('alertIcon', data.alarmText === 'EARTHQUAKE' ? '震' : data.dangerLevel === 'co_critical' ? 'CO' : data.fallDetected ? '↯' : '!');
+      setText('alertIcon', data.alarmText === 'EARTHQUAKE' ? '震' : data.dangerLevel === 'co_critical' ? 'CO' : data.fallDetected ? '↯' : data.alarmText === 'NO MOTION' ? '时' : '!');
       setText('alertHeadline', alarmLabel(data.alarmText) || '高危报警');
       if (data.alarmText === 'EARTHQUAKE') setText('alertMessage', '检测到强震动，疑似地震或剧烈撞击，请立即查看现场。');
       else if (data.dangerLevel === 'co_critical') setText('alertMessage', '一氧化碳超标，已启动最高优先级联动。');
       else if (data.fallDetected) setText('alertMessage', '疑似老人跌倒，请立即查看现场。');
       else if (data.sos) setText('alertMessage', '老人主动求助，请立即处理。');
+      else if (data.alarmText === 'NO MOTION') setText('alertMessage', '长时间无活动，已进入看护提醒，请关注老人状态。');
       else setText('alertMessage', '检测到高危事件，请立即确认。');
       return;
     }
 
-    if (data.alarmAny) {
+    if (data.alarmAny || data.noMotion) {
       setText('alertIcon', '!');
       setText('alertHeadline', alarmLabel(data.alarmText) || '环境异常');
-      if (data.alarmText === 'NO MOTION') setText('alertMessage', '长时间无活动，已记录提醒，请关注老人状态。');
+      if (data.noMotion || data.alarmText === 'NO MOTION') setText('alertMessage', '长时间无活动，已记录提醒，请关注老人状态。');
       else if (data.alarmText === 'VIBRATION') setText('alertMessage', '检测到振动异常，已记录事件并联动提醒。');
       else setText('alertMessage', '系统检测到异常状态，已记录事件并执行本地联动。');
       return;
@@ -160,10 +161,10 @@
       return;
     }
 
-    if (data.alarmAny || data.nightActivity || muted) {
-      setText('criticalIcon', data.alarmText === 'NO MOTION' ? '时' : data.alarmText === 'VIBRATION' ? '震' : '!');
+    if (data.alarmAny || data.noMotion || data.nightActivity || muted) {
+      setText('criticalIcon', data.noMotion || data.alarmText === 'NO MOTION' ? '时' : data.alarmText === 'VIBRATION' ? '震' : '!');
       setText('criticalTitle', muted ? '告警已确认' : alarmLabel(data.alarmText) || '异常提醒');
-      if (data.alarmText === 'NO MOTION') setText('criticalText', '长时间无活动已触发提醒，请检查现场。');
+      if (data.noMotion || data.alarmText === 'NO MOTION') setText('criticalText', '长时间无活动已触发提醒，请检查现场。');
       else if (data.alarmText === 'VIBRATION') setText('criticalText', '检测到振动异常，请留意设备或现场环境。');
       else if (data.nightActivity) setText('criticalText', '暗环境检测到人体活动，已联动开灯。');
       else setText('criticalText', '系统检测到异常状态，请查看对应监测卡片。');
@@ -176,6 +177,8 @@
   function renderOperationalSummary(data) {
     const score = data.sos || data.fallDetected || data.dangerLevel === 'co_critical' || data.alarmText === 'EARTHQUAKE'
       ? 96
+      : data.noMotion || data.alarmText === 'NO MOTION'
+        ? 62
       : data.alarmAny
         ? 68
         : data.nightActivity
@@ -183,7 +186,7 @@
           : 12;
     setText('riskScore', score);
     setText('riskLevel', dangerLabel(data.dangerLevel));
-    setText('riskReason', data.alarmAny || data.nightActivity ? alarmLabel(data.alarmText) : '当前无危险报警。');
+    setText('riskReason', data.alarmAny || data.noMotion || data.nightActivity ? alarmLabel(data.alarmText) : '当前无危险报警。');
     setText('uptime', formatUptime(data.uptimeMs));
     setText('sampleCount', state.history.length);
     setText('pushRequired', data.pushRequired ? '需要' : '不需要');
@@ -288,6 +291,7 @@
     lanes.forEach(plot);
   }
 
+  // 渲染事件列表，包含告警、活动、控制变更和离线/上线事件。
   function renderEvents() {
     const box = $('events');
     if (!box) return;
@@ -310,6 +314,7 @@
       .join('');
   }
 
+  // 渲染起夜记录，显示离床、回床、持续时间和是否联动开灯。
   function renderNightRecords() {
     const box = $('nightRecords');
     if (!box) return;
@@ -337,6 +342,7 @@
       .join('');
   }
 
+  // 渲染演示模式按钮状态，兼容本地 file 模式和服务端 mock 模式。
   function renderDemoButton() {
     const button = $('demoButton');
     if (!button) return;
@@ -347,6 +353,7 @@
     button.setAttribute('aria-pressed', enabled ? 'true' : 'false');
   }
 
+  // 渲染联动开关表单，并在设备离线时锁定设置项。
   function renderControls() {
     document.querySelectorAll('[data-control]').forEach((input) => {
       input.checked = Boolean(state.controls[input.dataset.control]);
@@ -357,6 +364,28 @@
     renderAutomationPage(state.latest);
   }
 
+  // 渲染静态演示数据表单；编辑时避免被实时推送覆盖。
+  function renderDemoDataForm() {
+    document.querySelectorAll('[data-demo]').forEach((input) => {
+      const key = input.dataset.demo;
+      if (!state.demoDataDirty && !state.demoDataSaving && document.activeElement !== input) {
+        input.value = state.demoData[key] ?? '';
+      }
+      input.disabled = state.demoDataSaving;
+    });
+    document.querySelectorAll('[data-demo-bool]').forEach((input) => {
+      const key = input.dataset.demoBool;
+      if (!state.demoDataDirty && !state.demoDataSaving && document.activeElement !== input) {
+        input.checked = Boolean(state.demoData[key]);
+      }
+      input.disabled = state.demoDataSaving;
+    });
+    document.querySelectorAll('#demoDataForm button').forEach((button) => {
+      button.disabled = state.demoDataSaving;
+    });
+  }
+
+  // 渲染阈值表单；用户正在编辑或保存时避免服务端推送覆盖输入。
   function renderThresholds() {
     document.querySelectorAll('[data-threshold]').forEach((input) => {
       const key = input.dataset.threshold;
@@ -385,6 +414,7 @@
     renderLatest(state.latest);
   }
 
+  // 渲染自动化页面，把推导出的执行器状态映射为当前/待机/关闭。
   function renderAutomationPage(data) {
     if (!$('automationGrid')) return;
     const status = linkageStatus(data);
@@ -398,7 +428,7 @@
       ['curtainState', status.curtain ? '关闭' : status.curtainOpen ? '打开' : '待机'],
       ['alarmLightState', status.alarmLight ? '开启' : '关闭'],
       ['buzzerState', status.buzzer ? '开启' : '关闭'],
-      ['servoState', status.servo ? '动作' : '复位'],
+      ['servoState', status.servo ? '动作' : '待机'],
       ['fanState', status.fan ? '开启' : '关闭'],
       ['noMotionState', status.noMotion ? '提醒' : '待机'],
       ['automationUpdatedAt', data?.timestamp ? new Date(data.timestamp).toLocaleString() : '--']
@@ -412,6 +442,7 @@
     });
   }
 
+  // 危急告警短暂保持，避免瞬时数据波动导致弹窗闪退。
   function heldCriticalFrame(data, criticalType) {
     if (criticalType) {
       state.criticalHoldUntil = Date.now() + 4000;
@@ -427,7 +458,7 @@
     return data;
   }
 
-  // 总入口：把一帧遥测数据分发到各个页面区域。
+  // 页面总渲染入口：根据最新遥测刷新总览、图表、事件、表单和告警弹窗。
   function renderLatest(data) {
     if (!data) {
       refreshDeviceConnection();
@@ -473,6 +504,7 @@
     renderNightRecords,
     renderDemoButton,
     renderControls,
+    renderDemoDataForm,
     renderThresholds,
     renderAutomationPage,
     renderLatest

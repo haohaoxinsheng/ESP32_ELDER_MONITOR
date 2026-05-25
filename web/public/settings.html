@@ -1,3 +1,4 @@
+<!-- 设置页面：提供传感器启停、阈值配置、联动开关和演示模式控制。 -->
 <!doctype html>
 <html lang="zh-CN">
   <head>
@@ -180,6 +181,64 @@
             </div>
           </article>
 
+          <article class="panel demo-data-panel" id="demoData">
+            <div class="panel-head compact">
+              <div>
+                <h2>静态演示数据</h2>
+                <span>用于无设备时固定展示各项传感器和告警状态</span>
+              </div>
+              <span id="demoDataStatus" class="tag muted">未保存</span>
+            </div>
+            <form id="demoDataForm" class="demo-data-form">
+              <div class="threshold-grid compact">
+                <label><span>设备名称</span><input type="text" data-demo="deviceName" /></label>
+                <label><span>产品标识</span><input type="text" data-demo="productKey" /></label>
+                <label><span>温度 ℃</span><input type="number" min="-20" max="80" step="0.1" data-demo="temperatureC" /></label>
+                <label><span>湿度 %</span><input type="number" min="0" max="100" step="1" data-demo="humidity" /></label>
+                <label><span>光照 Lux</span><input type="number" min="0" max="2000" step="1" data-demo="lux" /></label>
+                <label><span>MQ2</span><input type="number" min="0" max="4095" step="1" data-demo="mq2Raw" /></label>
+                <label><span>MQ135</span><input type="number" min="0" max="4095" step="1" data-demo="mq135Raw" /></label>
+                <label><span>MQ7</span><input type="number" min="0" max="4095" step="1" data-demo="mq7Raw" /></label>
+                <label><span>FSR</span><input type="number" min="0" max="4095" step="1" data-demo="fsrRaw" /></label>
+                <label><span>振动</span><input type="number" min="0" max="4095" step="1" data-demo="vibrationRaw" /></label>
+              </div>
+              <div class="demo-bool-grid">
+                <label class="switch-row">
+                  <span><strong>PIR 活动</strong><small>展示有人活动或夜间活动</small></span>
+                  <input type="checkbox" data-demo-bool="pirMotion" />
+                </label>
+                <label class="switch-row">
+                  <span><strong>SOS 求助</strong><small>触发主动求助弹窗和舵机状态</small></span>
+                  <input type="checkbox" data-demo-bool="sos" />
+                </label>
+                <label class="switch-row">
+                  <span><strong>疑似跌倒</strong><small>触发跌倒强提醒</small></span>
+                  <input type="checkbox" data-demo-bool="fallDetected" />
+                </label>
+                <label class="switch-row">
+                  <span><strong>无人活动</strong><small>展示看护提醒状态</small></span>
+                  <input type="checkbox" data-demo-bool="noMotion" />
+                </label>
+                <label class="switch-row">
+                  <span><strong>暗环境</strong><small>配合灯光和起夜联动展示</small></span>
+                  <input type="checkbox" data-demo-bool="dark" />
+                </label>
+                <label class="switch-row">
+                  <span><strong>在床状态</strong><small>用于演示离床或在床</small></span>
+                  <input type="checkbox" data-demo-bool="bedOccupied" />
+                </label>
+                <label class="switch-row">
+                  <span><strong>演示风扇开启</strong><small>只影响静态演示数据，真实设备仍按异常联动</small></span>
+                  <input type="checkbox" data-demo-bool="fanOn" />
+                </label>
+              </div>
+              <div class="settings-actions">
+                <button class="ghost-button" id="resetDemoData" type="button"><span>↺</span><strong>恢复默认</strong></button>
+                <button class="primary-button" type="submit"><span>✓</span><strong>保存演示数据</strong></button>
+              </div>
+            </form>
+          </article>
+
           <article class="panel setting-help">
             <div class="panel-head">
               <div>
@@ -202,7 +261,7 @@
     </div>
 
     <button id="demoButton" class="demo-corner" type="button" aria-pressed="false">
-      <span>模拟演示</span>
+      <span>静态演示</span>
       <strong>关闭</strong>
     </button>
 

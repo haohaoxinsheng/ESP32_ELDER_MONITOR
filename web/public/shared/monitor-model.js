@@ -1,3 +1,4 @@
+// 前后端共享模型：统一默认阈值、控制项、遥测归一化、告警推导和静态演示数据。
 (function (root, factory) {
   if (typeof module === 'object' && module.exports) {
     module.exports = factory();
@@ -45,6 +46,41 @@
     noMotionMinutes: 30
   });
 
+  const DEFAULT_DEMO_TELEMETRY = Object.freeze({
+    deviceName: 'demo-esp32',
+    productKey: 'static-demo',
+    temperatureC: 26.5,
+    humidity: 58,
+    lux: 180,
+    mq2Raw: 980,
+    mq135Raw: 1180,
+    mq7Raw: 860,
+    fsrRaw: 1680,
+    vibrationRaw: 120,
+    pirMotion: false,
+    vibration: false,
+    sos: false,
+    noMotion: false,
+    fallDetected: false,
+    dark: false,
+    bedOccupied: true,
+    nightWakeActive: false,
+    nightActivity: false,
+    alarmAny: false,
+    pushRequired: false,
+    fanOn: false,
+    ledOn: false,
+    darkLightOn: false,
+    nightLightOn: false,
+    nightWakeLightOn: false,
+    alarmLightOn: false,
+    servoActive: false,
+    dangerLevel: 'normal',
+    alarmText: 'NORMAL',
+    uptimeMs: 0
+  });
+
+  // 返回默认配置副本，避免调用方直接修改冻结的默认对象。
   function cloneDefaults(source) {
     return { ...source };
   }
@@ -57,6 +93,11 @@
     return cloneDefaults(DEFAULT_THRESHOLDS);
   }
 
+  function createDefaultDemoTelemetry() {
+    return cloneDefaults(DEFAULT_DEMO_TELEMETRY);
+  }
+
+  // 归一化阈值：补齐缺省值、转换数字/布尔值，并修正上下限顺序。
   function normalizeThresholds(input) {
     const next = createDefaultThresholds();
     const source = input || {};
@@ -94,6 +135,7 @@
     return next;
   }
 
+  // 把可选数字字段统一成 number 或 null，便于前后端一致渲染缺测值。
   function optionalNumber(value) {
     if (value === null || value === undefined || value === '') return null;
     const number = Number(value);
@@ -105,6 +147,7 @@
     return Number.isFinite(Number(value));
   }
 
+  // 标准化设备上报字段，屏蔽空值、旧字段名和布尔/数字混用差异。
   function normalizeTelemetry(input, options) {
     const now = options && options.timestamp ? new Date(options.timestamp) : new Date();
     const source = input || {};
@@ -123,6 +166,7 @@
       pirMotion: Boolean(source.pirMotion),
       vibration: Boolean(source.vibration),
       sos: Boolean(source.sos),
+      noMotion: Boolean(source.noMotion ?? (source.alarmText === 'NO MOTION')),
       fallDetected: Boolean(source.fallDetected ?? source.fall ?? false),
       dark: Boolean(source.dark),
       bedOccupied: Boolean(source.bedOccupied ?? false),
@@ -136,12 +180,21 @@
       nightLightOn: Boolean(source.nightLightOn),
       nightWakeLightOn: Boolean(source.nightWakeLightOn),
       alarmLightOn: Boolean(source.alarmLightOn),
+      servoActive: Boolean(source.servoActive),
       dangerLevel: String(source.dangerLevel || 'normal'),
       alarmText: String(source.alarmText || 'NORMAL'),
       uptimeMs: Number(source.uptimeMs ?? 0)
     };
   }
 
+  function normalizeDemoTelemetry(input) {
+    return normalizeTelemetry({
+      ...DEFAULT_DEMO_TELEMETRY,
+      ...(input || {})
+    }, { timestamp: DEFAULT_DEMO_TELEMETRY.timestamp || new Date().toISOString() });
+  }
+
+  // 根据阈值和联动开关重新推导告警、灯光、风扇和主告警文案。
   function deriveTelemetry(payload, thresholds, controls) {
     const th = normalizeThresholds(thresholds);
     const ctl = { ...createDefaultControls(), ...(controls || {}) };
@@ -149,6 +202,8 @@
 
     next.pirMotion = th.enablePir && next.pirMotion;
     next.sos = th.enableSos && next.sos;
+    const noMotion = Boolean(ctl.noMotionWarning && (next.noMotion || next.alarmText === 'NO MOTION'));
+    next.noMotion = noMotion;
 
     const airDanger = th.enableMq135 && Number(next.mq135Raw) >= th.mq135Danger;
     const airWarning = th.enableMq135 && Number(next.mq135Raw) >= th.mq135Warn;
@@ -170,8 +225,8 @@
     next.nightWakeActive = Boolean(next.nightWakeActive || (next.dark && !next.bedOccupied && next.pirMotion));
     next.nightActivity = Boolean(next.nightActivity || (next.dark && next.pirMotion) || next.nightWakeActive);
     next.vibration = th.enableSw420 && Boolean(next.vibration || earthquake);
-    next.alarmAny = Boolean(next.sos || next.fallDetected || earthquake || coDanger || smokeDanger || airDanger || warning || next.vibration);
-    next.pushRequired = Boolean(next.pushRequired || next.sos || next.fallDetected || earthquake || coDanger || smokeDanger || airDanger);
+    next.alarmAny = Boolean(next.sos || next.fallDetected || earthquake || coDanger || smokeDanger || airDanger || warning || next.vibration || noMotion);
+    next.pushRequired = Boolean(next.pushRequired || next.sos || next.fallDetected || earthquake || coDanger || smokeDanger || airDanger || noMotion);
     next.fanOn = Boolean(next.fanOn || coDanger || smokeDanger || airDanger || tempHumid);
     next.darkLightOn = Boolean(next.darkLightOn || (next.dark && ctl.darkLight));
     next.nightLightOn = Boolean(next.nightLightOn || (next.nightActivity && ctl.nightLight));
@@ -218,6 +273,9 @@
     } else if (pressure) {
       next.dangerLevel = 'warning';
       next.alarmText = 'PRESSURE';
+    } else if (noMotion) {
+      next.dangerLevel = 'warning';
+      next.alarmText = 'NO MOTION';
     } else if (next.vibration) {
       next.dangerLevel = 'warning';
       next.alarmText = 'VIBRATION';
@@ -233,10 +291,12 @@
     return next;
   }
 
+  // 服务端入口：上报数据先归一化，再按当前配置推导完整遥测。
   function normalizeAndDeriveTelemetry(input, thresholds, controls, options) {
     return deriveTelemetry(normalizeTelemetry(input, options), thresholds, controls);
   }
 
+  // 计算“实际生效”的联动状态，供 Web 状态页和健康检查复用。
   function effectiveLinkage(payload, controls) {
     const ctl = { ...createDefaultControls(), ...(controls || {}) };
     if (!payload) {
@@ -249,6 +309,7 @@
         fan: false,
         buzzer: false,
         servo: false,
+        servoStandby: true,
         noMotion: false,
         nightWakeLight: false
       };
@@ -264,64 +325,38 @@
       alarmLight: Boolean(payload.alarmAny) && ctl.alarmLight,
       fan: Boolean(payload.fanOn) && ctl.fanVentilation,
       buzzer: alarmActive && ctl.buzzerAlarm,
-      servo: Boolean(payload.sos) && ctl.sosServo,
-      noMotion: payload.alarmText === 'NO MOTION' && ctl.noMotionWarning
+      servo: Boolean(payload.servoActive || (payload.sos && ctl.sosServo)),
+      servoStandby: !payload.servoActive,
+      noMotion: Boolean((payload.noMotion || payload.alarmText === 'NO MOTION') && ctl.noMotionWarning)
     };
   }
 
+  // 生成静态演示遥测：只刷新时间戳和运行时长，不再自动切换场景。
   function createDemoTelemetry(options) {
     const config = options || {};
     const timestampMs = config.timestampMs || Date.now();
-    const t = timestampMs / 1000;
-    const nightActivity = Math.floor(t / 18) % 4 === 1;
-    const bedOccupied = Math.floor(t / 18) % 4 !== 1;
-    const sos = Math.floor(t / 40) % 6 === 2;
-    const fallDetected = Math.floor(t / 55) % 7 === 3;
-    const coDanger = Math.floor(t / 70) % 8 === 4;
-    const smokeDanger = Math.floor(t / 50) % 7 === 3;
-    const earthquake = Math.floor(t / 90) % 8 === 5;
-    const alarmAny = sos || fallDetected || coDanger || smokeDanger || earthquake;
-
+    const source = {
+      ...DEFAULT_DEMO_TELEMETRY,
+      ...(config.demoData || {})
+    };
     return normalizeAndDeriveTelemetry({
-      deviceName: config.deviceName || 'demo-esp32',
-      productKey: config.productKey || 'demo',
-      temperatureC: 25 + Math.sin(t / 9) * 2.2,
-      humidity: 58 + Math.cos(t / 12) * 8,
-      lux: nightActivity ? 24 : 260 + Math.sin(t / 7) * 80,
-      mq2Raw: smokeDanger ? 2600 : 1000 + Math.round(Math.sin(t / 11) * 130),
-      mq135Raw: 1200 + Math.round(Math.sin(t / 10) * 120),
-      mq7Raw: coDanger ? 2600 : 900 + Math.round(Math.cos(t / 8) * 100),
-      vibrationRaw: earthquake ? 3400 : Math.max(0, 140 + Math.round(Math.sin(t / 6) * 80)),
-      fsrRaw: bedOccupied ? 1700 : 320,
-      pirMotion: nightActivity,
-      vibration: earthquake,
-      sos,
-      fallDetected,
-      dark: nightActivity,
-      bedOccupied,
-      nightWakeActive: nightActivity && !bedOccupied,
-      nightActivity,
-      alarmAny,
-      pushRequired: alarmAny,
-      fanOn: coDanger || smokeDanger,
-      darkLightOn: nightActivity,
-      nightLightOn: nightActivity,
-      nightWakeLightOn: nightActivity && !bedOccupied,
-      alarmLightOn: alarmAny,
-      ledOn: nightActivity || alarmAny,
-      dangerLevel: earthquake ? 'critical' : coDanger ? 'co_critical' : fallDetected || sos ? 'critical' : smokeDanger ? 'danger' : nightActivity ? 'activity' : 'normal',
-      alarmText: earthquake ? 'EARTHQUAKE' : coDanger ? 'CO DANGER' : fallDetected ? 'FALL DETECTED' : sos ? 'SOS BUTTON' : smokeDanger ? 'SMOKE DANGER' : nightActivity ? 'NIGHT MOVE' : 'NORMAL',
-      uptimeMs: Math.round(t * 1000)
+      ...source,
+      deviceName: config.deviceName || source.deviceName || 'demo-esp32',
+      productKey: config.productKey || source.productKey || 'static-demo',
+      uptimeMs: Number.isFinite(Number(source.uptimeMs)) ? Number(source.uptimeMs) : 0
     }, config.thresholds, config.controls, { timestamp: timestampMs });
   }
 
   return {
     DEFAULT_CONTROLS,
     DEFAULT_THRESHOLDS,
+    DEFAULT_DEMO_TELEMETRY,
     createDefaultControls,
     createDefaultThresholds,
+    createDefaultDemoTelemetry,
     normalizeThresholds,
     normalizeTelemetry,
+    normalizeDemoTelemetry,
     deriveTelemetry,
     normalizeAndDeriveTelemetry,
     effectiveLinkage,

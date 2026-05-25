@@ -1,3 +1,4 @@
+// MQ-2 烟雾/可燃气体配置：定义 ADC 引脚和预警/危险阈值。
 #pragma once
 
 #include <Arduino.h>

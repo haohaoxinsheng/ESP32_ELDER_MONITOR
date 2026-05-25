@@ -1,3 +1,4 @@
+// 传感器采集与告警实现：读取环境/气体/压力/人体/振动数据，并推导活动和风险状态。
 #include "monitor/monitor_sensors.h"
 
 #include "cloud/aliyun_client.h"
@@ -14,6 +15,7 @@
 #include "monitor/monitor_state.h"
 
 namespace Monitor {
+// 读取所有启用的传感器；网页端关闭某个传感器时保留安全默认值。
 void readSensors() {
   const DeviceControlState& controls = AliyunClient::controlState();
   data.temperatureC = controls.enableDht22 ? dht.readTemperature() : NAN;
@@ -40,6 +42,7 @@ void readSensors() {
   }
 }
 
+// 根据光照和人体检测推导暗环境、夜间活动和起夜开灯保持状态。
 void updateActivityState() {
   const uint32_t now = millis();
   const DeviceControlState& controls = AliyunClient::controlState();
@@ -55,6 +58,7 @@ void updateActivityState() {
       (now - lastNightActivityMs <= Timing::NIGHT_LIGHT_HOLD_MS);
 }
 
+// 气体类告警：分别比较空气质量、烟雾/可燃气和 CO 的预警/危险阈值。
 void updateGasAlarms(const DeviceControlState& controls) {
   alarmState.airWarning = controls.enableMq135 && data.mq135Raw >= controls.mq135Warn;
   alarmState.airDanger = controls.enableMq135 && data.mq135Raw >= controls.mq135Danger;
@@ -64,6 +68,7 @@ void updateGasAlarms(const DeviceControlState& controls) {
   alarmState.coDanger = controls.enableMq7 && data.mq7Raw >= controls.mq7Danger;
 }
 
+// 舒适度告警：处理温度过高/过低和湿度过高/过低。
 void updateComfortAlarms(const DeviceControlState& controls) {
   alarmState.tempHumidity =
       controls.enableDht22 &&
@@ -73,6 +78,7 @@ void updateComfortAlarms(const DeviceControlState& controls) {
   alarmState.humidityLow = controls.enableDht22 && !isnan(data.humidity) && data.humidity <= controls.humidityLow;
 }
 
+// 活动类告警：处理压力、振动、长时间无活动、跌倒和 SOS。
 void updateActivityAlarms(const DeviceControlState& controls, uint32_t now) {
   alarmState.pressure = controls.enableFsr && data.fsrRaw >= controls.fsrPressure;
   alarmState.vibration = controls.enableSw420 && data.vibration;
@@ -85,6 +91,7 @@ void updateActivityAlarms(const DeviceControlState& controls, uint32_t now) {
   alarmState.sos = controls.enableSos && data.sos;
 }
 
+// 汇总最终告警等级，决定是否触发强提醒、推送和执行器联动。
 void finalizeAlarmState() {
   alarmState.critical = alarmState.coDanger || alarmState.fallDetected || alarmState.sos;
   alarmState.pushRequired = alarmState.critical || alarmState.airDanger || alarmState.smokeDanger || alarmState.noMotion;
@@ -96,6 +103,7 @@ void finalizeAlarmState() {
                    alarmState.noMotion || alarmState.fallDetected || alarmState.sos;
 }
 
+// 告警总入口：每次采样或快速状态刷新后重新计算完整风险状态。
 void updateAlarmState() {
   const uint32_t now = millis();
   const DeviceControlState& controls = AliyunClient::controlState();

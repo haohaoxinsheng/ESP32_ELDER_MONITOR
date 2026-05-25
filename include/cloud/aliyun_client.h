@@ -1,3 +1,4 @@
+// 云端客户端接口：声明 WiFi/MQTT/Web 镜像发布、控制拉取和连接状态查询入口。
 #pragma once
 
 #include <Arduino.h>

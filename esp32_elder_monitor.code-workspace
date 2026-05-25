@@ -1,4 +1,5 @@
 {
+	"_comment": "VS Code 工作区配置：把当前 ESP32 老人监测工程和 PlatformIO 项目目录放在同一个工作区中。",
 	"folders": [
 		{
 			"path": "."

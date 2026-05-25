@@ -1,3 +1,4 @@
+// 硬件初始化实现：配置 GPIO、ADC、I2C 设备、蜂鸣器、灯光、舵机和 SOS 按键。
 #include "monitor/monitor_hardware.h"
 
 #include <Wire.h>
@@ -13,9 +14,11 @@
 #include "devices/pir_config.h"
 #include "devices/sos_button_config.h"
 #include "devices/sw420_config.h"
+#include "monitor/monitor_servo.h"
 #include "monitor/monitor_state.h"
 
 namespace Monitor {
+// 统一设置蜂鸣器输出，兼容有源蜂鸣器和无源蜂鸣器两种接法。
 void setBuzzer(bool on) {
   buzzerOn = on;
   if (ActuatorConfig::BUZZER_IS_ACTIVE) {
@@ -32,12 +35,14 @@ void setBuzzer(bool on) {
   }
 }
 
+// 统一设置外接 LED 灯，极性由 ActuatorConfig::LED_LIGHT_ACTIVE_HIGH 决定。
 void setLedLight(bool on) {
   const uint8_t activeLevel = ActuatorConfig::LED_LIGHT_ACTIVE_HIGH ? HIGH : LOW;
   const uint8_t inactiveLevel = ActuatorConfig::LED_LIGHT_ACTIVE_HIGH ? LOW : HIGH;
   digitalWrite(ActuatorConfig::LED_LIGHT_PIN, on ? activeLevel : inactiveLevel);
 }
 
+// SOS 按键消抖读取：默认上拉输入，稳定低电平表示按下。
 bool buttonPressed() {
   const bool reading = digitalRead(SosButtonConfig::PIN);
   const uint32_t now = millis();
@@ -54,6 +59,7 @@ bool buttonPressed() {
   return stableSosState == LOW;
 }
 
+// 配置所有 GPIO、ADC 分辨率和执行器默认状态。
 void setupPins() {
   pinMode(PirConfig::OUT_PIN, INPUT);
   pinMode(Sw420Config::DOUT_PIN, INPUT);
@@ -61,6 +67,7 @@ void setupPins() {
   pinMode(ActuatorConfig::BUZZER_PIN, OUTPUT);
   pinMode(ActuatorConfig::FAN_RELAY_PIN, OUTPUT);
   pinMode(ActuatorConfig::LED_LIGHT_PIN, OUTPUT);
+  ServoDrive::setupPin();
 
   setBuzzer(false);
   digitalWrite(ActuatorConfig::FAN_RELAY_PIN, LOW);
@@ -73,6 +80,7 @@ void setupPins() {
   analogSetPinAttenuation(Fsr402Config::AOUT_PIN, ADC_11db);
 }
 
+// 初始化 I2C 设备、DHT22、舵机和 OLED 启动画面。
 void setupDevices() {
   Wire.begin(OledConfig::SDA_PIN, OledConfig::SCL_PIN);
   oledOk = display.begin(SSD1306_SWITCHCAPVCC, OledConfig::I2C_ADDR);
@@ -83,9 +91,7 @@ void setupDevices() {
                               &bh1750Wire);
   dht.begin();
 
-  servo.setPeriodHertz(50);
-  servo.attach(ActuatorConfig::SERVO_PWM_PIN, 500, 2400);
-  servo.write(ActuatorConfig::SERVO_NORMAL_ANGLE);
+  ServoDrive::begin();
 
   if (oledOk) {
     display.clearDisplay();

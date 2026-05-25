@@ -1,3 +1,4 @@
+<!-- FSR420 接线示意 SVG：展示压力传感器在面包板上的分压和接线方式。 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="900" viewBox="0 0 1400 900" role="img" aria-labelledby="title desc">
   <title id="title">ESP32 连接 FSR420 压力传感器面包板效果图</title>
   <desc id="desc">FSR420 和 10k 欧姆电阻组成分压电路，输出接 ESP32 GPIO34 ADC，供电使用 3.3V。</desc>

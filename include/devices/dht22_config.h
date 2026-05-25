@@ -1,3 +1,4 @@
+// DHT22 温湿度传感器配置：定义数据引脚、传感器类型和舒适度阈值。
 #pragma once
 
 #include <Arduino.h>

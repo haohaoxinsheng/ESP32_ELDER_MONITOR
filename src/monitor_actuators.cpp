@@ -1,17 +1,21 @@
+// 执行器联动实现：根据告警、暗环境、起夜、SOS 和网页开关控制风扇、灯、舵机、蜂鸣器。
 #include "monitor/monitor_actuators.h"
 
 #include "cloud/aliyun_client.h"
 #include "config.h"
 #include "devices/actuator_config.h"
 #include "monitor/monitor_hardware.h"
+#include "monitor/monitor_servo.h"
 #include "monitor/monitor_state.h"
 
 namespace Monitor {
+// 风扇联动：在气体或温湿度风险需要通风时吸合继电器。
 void updateFan(const DeviceControlState& controls) {
   fanOn = isVentilationNeeded() && controls.fanVentilation;
   digitalWrite(ActuatorConfig::FAN_RELAY_PIN, fanOn ? HIGH : LOW);
 }
 
+// 灯光联动：拆分暗环境灯、夜间活动灯、起夜灯和告警灯，危急告警时闪烁。
 void updateLighting(const DeviceControlState& controls) {
   const bool bedOccupied = isBedOccupied(controls);
   darkLightOn = controls.darkLight && activityState.dark;
@@ -31,17 +35,20 @@ void updateLighting(const DeviceControlState& controls) {
   }
 }
 
+// 舵机联动：SOS 优先级最高，其次根据暗环境自动开合窗帘。
 void updateServoPosition(const DeviceControlState& controls) {
   if (alarmState.sos && controls.sosServo) {
-    servo.write(ActuatorConfig::SERVO_SOS_ANGLE);
-  } else if (controls.curtainAuto) {
-    servo.write(activityState.dark ? ActuatorConfig::SERVO_CURTAIN_CLOSED_ANGLE
-                                   : ActuatorConfig::SERVO_CURTAIN_OPEN_ANGLE);
-  } else {
-    servo.write(ActuatorConfig::SERVO_NORMAL_ANGLE);
+    ServoDrive::driveSos(true, true);
+    ServoDrive::updateStandby();
+    return;
   }
+
+  ServoDrive::driveSos(false, false);
+  ServoDrive::driveCurtain(controls.curtainAuto, activityState.dark);
+  ServoDrive::updateStandby();
 }
 
+// 蜂鸣器联动：危险告警常响，普通告警按节奏鸣叫。
 void updateBuzzerAlarm(const DeviceControlState& controls) {
   if (!alarmState.any || !controls.buzzerAlarm) {
     setBuzzer(false);
@@ -68,6 +75,7 @@ void updateBuzzerAlarm(const DeviceControlState& controls) {
   }
 }
 
+// 执行器总入口：按当前云端控制状态刷新所有本地输出。
 void updateActuators() {
   const DeviceControlState& controls = AliyunClient::controlState();
   updateFan(controls);

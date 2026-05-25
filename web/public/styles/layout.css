@@ -255,6 +255,8 @@ main {
 .events,
 .sensor-settings-grid,
 .threshold-grid,
+.demo-data-form,
+.demo-bool-grid,
 .automation-grid,
 .automation-state {
   display: grid;
@@ -293,6 +295,11 @@ main {
 
 .threshold-grid.compact {
   grid-template-columns: repeat(2, minmax(120px, 1fr));
+}
+
+.demo-data-form,
+.demo-bool-grid {
+  grid-template-columns: 1fr;
 }
 
 .automation-grid {

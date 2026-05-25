@@ -1,3 +1,4 @@
+// 板载 RGB 状态灯工具：在上传、启动和运行阶段提供简单状态反馈。
 #pragma once
 
 #include <Arduino.h>

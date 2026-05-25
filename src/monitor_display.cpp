@@ -1,3 +1,4 @@
+// OLED 显示实现：整理告警项并在本地屏幕轮播安全状态、读数和阈值信息。
 #include "monitor/monitor_display.h"
 
 #include <cstring>
@@ -12,6 +13,7 @@
 #include "monitor/monitor_state.h"
 
 namespace Monitor {
+// OLED 告警条目：把一个风险项压缩成屏幕可轮播的一页内容。
 struct DisplayAlert {
   const char* item = "";
   const char* level = "";
@@ -23,6 +25,7 @@ struct DisplayAlert {
   bool integerValue = false;
 };
 
+// 追加一个 OLED 告警页，调用方负责控制数组容量。
 void addDisplayAlert(DisplayAlert* alerts,
                      uint8_t& count,
                      const char* item,
@@ -44,6 +47,7 @@ void addDisplayAlert(DisplayAlert* alerts,
   alert.integerValue = integerValue;
 }
 
+// 收集当前所有告警项，供 OLED 在多个风险之间轮播。
 uint8_t collectDisplayAlerts(DisplayAlert* alerts) {
   uint8_t count = 0;
 
@@ -115,6 +119,7 @@ uint8_t collectDisplayAlerts(DisplayAlert* alerts) {
   return count;
 }
 
+// 紧凑输出数值，避免 OLED 小屏幕上出现过长字符串。
 void printCompactValue(float value, const char* unit, bool integerValue) {
   if (isnan(value)) {
     display.print(F("--"));
@@ -126,6 +131,7 @@ void printCompactValue(float value, const char* unit, bool integerValue) {
   display.print(unit);
 }
 
+// 绘制 OLED 顶部标题和状态标签。
 void drawHeader(const char* stateText) {
   display.setTextSize(1);
   display.setCursor(0, 0);
@@ -135,6 +141,7 @@ void drawHeader(const char* stateText) {
   display.drawFastHLine(0, 10, OledConfig::WIDTH, SSD1306_WHITE);
 }
 
+// 绘制温湿度和光照摘要行。
 void drawEnvironmentStrip(uint8_t y) {
   display.setTextSize(1);
   display.setCursor(0, y);
@@ -155,6 +162,7 @@ void drawEnvironmentStrip(uint8_t y) {
   else display.print(data.lux, 0);
 }
 
+// 绘制底部人体、蜂鸣器和风扇状态。
 void drawFooterStatus(uint8_t y) {
   display.setTextSize(1);
   display.setCursor(0, y);
@@ -170,6 +178,7 @@ void drawFooterStatus(uint8_t y) {
   display.print(fanOn ? F("ON") : F("OFF"));
 }
 
+// OLED 主绘制入口：无告警显示 NORMAL，有告警按页轮播风险详情。
 void drawDisplay() {
   if (!oledOk) return;
 

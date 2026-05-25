@@ -16,6 +16,9 @@
     mock: {
       enabled: false
     },
+    demoData: monitorModel.createDefaultDemoTelemetry(),
+    demoDataDirty: false,
+    demoDataSaving: false,
     thresholdFormDirty: false,
     thresholdFormSaving: false,
     thresholdDraft: {},

@@ -522,7 +522,8 @@
   color: var(--good);
 }
 
-.threshold-grid input {
+.threshold-grid input,
+.demo-data-form input[type="text"] {
   width: 100%;
   height: 36px;
   padding: 0 10px;
@@ -533,7 +534,8 @@
   font: inherit;
 }
 
-.threshold-grid input:focus {
+.threshold-grid input:focus,
+.demo-data-form input[type="text"]:focus {
   outline: 2px solid rgba(98, 214, 255, 0.3);
   border-color: rgba(98, 214, 255, 0.5);
 }

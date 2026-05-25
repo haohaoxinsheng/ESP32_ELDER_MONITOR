@@ -20,6 +20,7 @@
     renderEvents,
     renderNightRecords,
     renderControls,
+    renderDemoDataForm,
     renderThresholds,
     renderDemoButton
   } = App;
@@ -29,6 +30,7 @@
     return { ...state.thresholdDraft };
   }
 
+  // 读取完整阈值表单，用于用户未局部编辑但直接提交的场景。
   function readFullThresholdForm() {
     const values = {};
     document.querySelectorAll('[data-threshold]').forEach((input) => {
@@ -46,6 +48,7 @@
     return Number.isFinite(value) ? value : input.value;
   }
 
+  // 保存用户正在编辑的单个阈值/传感器开关，防止实时推送覆盖草稿。
   function rememberThresholdDraft(input) {
     const key = input.dataset.threshold || input.dataset.sensor;
     if (!key) return;
@@ -55,6 +58,10 @@
 
   function setSettingsStatus(text) {
     setText('settingsStatus', text);
+  }
+
+  function setDemoDataStatus(text) {
+    setText('demoDataStatus', text);
   }
 
   function flashSettingsSaved() {
@@ -76,6 +83,7 @@
     renderThresholds();
   }
 
+  // 解析后端 JSON 响应，并把错误响应转成可显示的异常信息。
   async function readJsonResponse(response, actionText) {
     let body = null;
     try {
@@ -89,6 +97,7 @@
     return body || {};
   }
 
+  // 后端可能返回纯 controls 或 { controls }，这里统一成完整开关对象。
   function normalizeControlsResponse(saved) {
     const source = saved?.controls || saved || {};
     const next = monitorModel.createDefaultControls();
@@ -110,6 +119,74 @@
     });
     state.events = state.events.slice(0, 80);
     renderEvents();
+  }
+
+  function demoInputValue(input) {
+    if (input.matches('[data-demo-bool]')) return input.checked;
+    if (input.dataset.demo === 'deviceName' || input.dataset.demo === 'productKey' || input.dataset.demo === 'alarmText' || input.dataset.demo === 'dangerLevel') {
+      return input.value;
+    }
+    const value = Number(input.value);
+    return Number.isFinite(value) ? value : input.value;
+  }
+
+  function readDemoDataForm() {
+    const values = {};
+    document.querySelectorAll('[data-demo]').forEach((input) => {
+      values[input.dataset.demo] = demoInputValue(input);
+    });
+    document.querySelectorAll('[data-demo-bool]').forEach((input) => {
+      values[input.dataset.demoBool] = input.checked;
+    });
+    return monitorModel.normalizeDemoTelemetry(values);
+  }
+
+  function handleDemoData(demoData) {
+    if (state.demoDataDirty || state.demoDataSaving) return;
+    state.demoData = monitorModel.normalizeDemoTelemetry(demoData || {});
+    renderDemoDataForm();
+  }
+
+  async function saveDemoData(nextDemoData) {
+    state.demoDataSaving = true;
+    state.demoData = monitorModel.normalizeDemoTelemetry(nextDemoData || state.demoData);
+    setDemoDataStatus('保存中...');
+
+    if (location.protocol === 'file:') {
+      localStorage.setItem('elderMonitorDemoData', JSON.stringify(state.demoData));
+      state.demoDataDirty = false;
+      state.demoDataSaving = false;
+      setDemoDataStatus('本地已保存');
+      addLocalEvent('DEMO DATA UPDATED', '本地静态演示数据已更新');
+      renderDemoDataForm();
+      tickDemo();
+      return;
+    }
+
+    try {
+      const response = await fetch('/api/demo-data', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(state.demoData)
+      });
+      const saved = await readJsonResponse(response, '保存演示数据');
+      state.demoData = monitorModel.normalizeDemoTelemetry(saved);
+      state.demoDataDirty = false;
+      setDemoDataStatus('已保存');
+      renderDemoDataForm();
+    } catch (error) {
+      setDemoDataStatus(error.message || '保存失败');
+    } finally {
+      state.demoDataSaving = false;
+      renderDemoDataForm();
+    }
+  }
+
+  function resetDemoData() {
+    state.demoData = monitorModel.createDefaultDemoTelemetry();
+    state.demoDataDirty = false;
+    renderDemoDataForm();
+    return saveDemoData(state.demoData);
   }
 
   // 保存联动开关；本地演示写 localStorage，在线模式提交到服务端。
@@ -191,6 +268,7 @@
     }
   }
 
+  // 恢复默认阈值并立即保存到本地演示或服务端。
   function resetThresholds() {
     state.thresholdDraft = monitorModel.createDefaultThresholds();
     state.thresholdFormDirty = true;
@@ -240,12 +318,14 @@
     renderThresholds();
   }
 
+  // 连接状态变化后刷新设置锁定和页面主状态。
   function handleConnection(connection) {
     updateDeviceConnection(connection || {});
     refreshSettingsLock();
     renderLatest(state.latest);
   }
 
+  // 在线模式下切换服务端 mock，供公网环境无设备时演示。
   async function toggleServerDemo() {
     const response = await fetch('/api/mock', {
       method: 'POST',
@@ -255,6 +335,7 @@
     handleMock(await response.json());
   }
 
+  // 本地 file 演示模式下，根据床位变化维护起夜记录。
   function updateLocalNightRecords(previous, payload) {
     if (location.protocol !== 'file:' || !state.controls.nightWakeMonitor || !previous) return;
     const leftBed = previous.bedOccupied && !payload.bedOccupied && payload.dark;
@@ -277,11 +358,12 @@
     renderNightRecords();
   }
 
-  // 本地演示模式下生成一帧模拟数据，并驱动事件与起夜记录联动。
+  // 本地演示模式下读取一帧静态数据，并驱动事件与起夜记录联动。
   function tickDemo() {
     const payload = monitorModel.createDemoTelemetry({
       deviceName: 'demo-esp32',
       productKey: 'local-demo',
+      demoData: state.demoData,
       thresholds: state.thresholds,
       controls: state.controls
     });
@@ -330,6 +412,7 @@
     await toggleServerDemo();
   }
 
+  // 建立实时数据通道；file 协议下自动切换为本地演示。
   function connectStream() {
     if (location.protocol === 'file:') {
       startDemo();
@@ -345,6 +428,7 @@
     stream.addEventListener('controls', (event) => handleControls(JSON.parse(event.data)));
     stream.addEventListener('thresholds', (event) => handleThresholds(JSON.parse(event.data)));
     stream.addEventListener('mock', (event) => handleMock(JSON.parse(event.data)));
+    stream.addEventListener('demoData', (event) => handleDemoData(JSON.parse(event.data)));
     stream.addEventListener('connection', (event) => handleConnection(JSON.parse(event.data)));
     stream.addEventListener('error', () => setConnection(false, '连接中断'));
   }
@@ -380,6 +464,31 @@
     if ($('resetThresholds')) {
       $('resetThresholds').addEventListener('click', async () => {
         await resetThresholds();
+      });
+    }
+
+    if ($('demoDataForm')) {
+      $('demoDataForm').addEventListener('input', (event) => {
+        if (event.target.matches('[data-demo], [data-demo-bool]')) {
+          state.demoDataDirty = true;
+          setDemoDataStatus('未保存');
+        }
+      });
+      $('demoDataForm').addEventListener('change', (event) => {
+        if (event.target.matches('[data-demo], [data-demo-bool]')) {
+          state.demoDataDirty = true;
+          setDemoDataStatus('未保存');
+        }
+      });
+      $('demoDataForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        await saveDemoData(readDemoDataForm());
+      });
+    }
+
+    if ($('resetDemoData')) {
+      $('resetDemoData').addEventListener('click', async () => {
+        await resetDemoData();
       });
     }
 
@@ -434,11 +543,21 @@
       } catch (error) {
         renderThresholds();
       }
+      try {
+        handleDemoData(JSON.parse(localStorage.getItem('elderMonitorDemoData') || '{}'));
+        setDemoDataStatus('本地设置');
+      } catch (error) {
+        renderDemoDataForm();
+      }
     } else {
       fetch('/api/thresholds')
         .then((response) => response.json())
         .then(handleThresholds)
         .catch(() => renderThresholds());
+      fetch('/api/demo-data')
+        .then((response) => response.json())
+        .then(handleDemoData)
+        .catch(() => renderDemoDataForm());
     }
 
     bindControls();
@@ -460,8 +579,13 @@
   Object.assign(App, {
     readThresholdForm,
     setSettingsStatus,
+    setDemoDataStatus,
     flashSettingsSaved,
     addLocalEvent,
+    readDemoDataForm,
+    handleDemoData,
+    saveDemoData,
+    resetDemoData,
     saveControls,
     saveThresholds,
     resetThresholds,

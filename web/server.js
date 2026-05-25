@@ -1,3 +1,4 @@
+// Web 后端服务：接收 ESP32 上报数据，维护历史/事件/阈值/联动状态，并通过 SSE 推送给前端。
 const path = require('path');
 const http = require('http');
 const fs = require('fs');
@@ -23,14 +24,19 @@ const dataDir = path.join(__dirname, 'data');
 const thresholdsFile = path.join(dataDir, 'thresholds.json');
 const controlsFile = path.join(dataDir, 'controls.json');
 const mockFile = path.join(dataDir, 'mock.json');
+const demoDataFile = path.join(dataDir, 'demo-data.json');
 let mockEnabled = loadMockState();
+let demoDataState = loadDemoData();
 let mockTimer = null;
 const controlState = loadControls();
 let thresholdState = loadThresholds();
 let lastBedOccupied = null;
 let currentNightWake = null;
 let lastDeviceOnline = false;
+let lastMotionSeenAtMs = null;
+let motionTrackingStartedAtMs = null;
 
+// 加载 .env，便于服务器部署时覆盖端口、令牌和演示模式。
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
   const content = fs.readFileSync(filePath, 'utf8');
@@ -44,6 +50,7 @@ function loadEnvFile(filePath) {
   }
 }
 
+// 读取阈值文件；文件不存在或损坏时回落到共享模型默认阈值。
 function loadThresholds() {
   try {
     if (!fs.existsSync(thresholdsFile)) return MonitorModel.createDefaultThresholds();
@@ -53,6 +60,7 @@ function loadThresholds() {
   }
 }
 
+// 读取联动开关状态；异常时使用默认联动配置。
 function loadControls() {
   try {
     if (!fs.existsSync(controlsFile)) return MonitorModel.createDefaultControls();
@@ -62,6 +70,7 @@ function loadControls() {
   }
 }
 
+// 只接受已知联动开关，避免未知字段污染设备控制状态。
 function normalizeControls(input) {
   const next = MonitorModel.createDefaultControls();
   const source = input || {};
@@ -73,11 +82,13 @@ function normalizeControls(input) {
   return next;
 }
 
+// 持久化联动开关，供服务重启后恢复。
 function saveControlState() {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(controlsFile, JSON.stringify(controlState, null, 2));
 }
 
+// 读取演示模式开关，支持公网服务重启后保持上次状态。
 function loadMockState() {
   try {
     if (!fs.existsSync(mockFile)) return initialMockEnabled;
@@ -88,11 +99,34 @@ function loadMockState() {
   }
 }
 
+// 持久化演示模式开关。
 function saveMockState() {
   fs.mkdirSync(dataDir, { recursive: true });
   fs.writeFileSync(mockFile, JSON.stringify({ enabled: mockEnabled }, null, 2));
 }
 
+// 读取可编辑的静态演示数据，替代原先按时间自动变化的数据。
+function loadDemoData() {
+  try {
+    if (!fs.existsSync(demoDataFile)) return MonitorModel.createDefaultDemoTelemetry();
+    return MonitorModel.normalizeDemoTelemetry(JSON.parse(fs.readFileSync(demoDataFile, 'utf8')));
+  } catch (error) {
+    return MonitorModel.createDefaultDemoTelemetry();
+  }
+}
+
+// 保存静态演示数据，并通知前端刷新表单。
+function saveDemoData(input) {
+  demoDataState = MonitorModel.normalizeDemoTelemetry({ ...demoDataState, ...(input || {}) });
+  fs.mkdirSync(dataDir, { recursive: true });
+  fs.writeFileSync(demoDataFile, JSON.stringify(demoDataState, null, 2));
+  broadcast('demoData', demoDataState);
+  addEvent('status', 'DEMO DATA UPDATED', '静态演示数据已更新');
+  if (mockEnabled) tickMock();
+  return demoDataState;
+}
+
+// 保存阈值并广播给所有浏览器，同时记录一条配置更新事件。
 function saveThresholds(input) {
   thresholdState = MonitorModel.normalizeThresholds(input);
   fs.mkdirSync(dataDir, { recursive: true });
@@ -109,16 +143,19 @@ function saveThresholds(input) {
   return thresholdState;
 }
 
+// 按最新遥测和控制项推导执行器真实联动状态。
 function effectiveLinkage(payload = latestTelemetry) {
   return MonitorModel.effectiveLinkage(payload, controlState);
 }
 
+// 根据最后上报时间判断真实设备是否在线；演示模式始终在线。
 function isDeviceOnline() {
   if (mockEnabled) return true;
   if (!latestTelemetry?.serverReceivedAt) return false;
   return Date.now() - new Date(latestTelemetry.serverReceivedAt).getTime() <= deviceOfflineTimeoutMs;
 }
 
+// 返回统一连接状态，前端设置锁定和离线提示都依赖这份数据。
 function connectionStatePayload() {
   return {
     deviceOnline: isDeviceOnline(),
@@ -127,6 +164,7 @@ function connectionStatePayload() {
   };
 }
 
+// 写操作前检查设备在线，避免离线时误保存无法同步到设备的配置。
 function assertDeviceOnline(res) {
   if (isDeviceOnline()) return true;
   sendJson(res, 409, {
@@ -137,12 +175,14 @@ function assertDeviceOnline(res) {
   return false;
 }
 
+// 追加事件并推送给所有 SSE 客户端。
 function addEvent(type, title, detail, timestamp = new Date().toISOString()) {
   events.unshift({ timestamp, type, title, detail });
   while (events.length > maxEvents) events.pop();
   broadcast('events', events);
 }
 
+// 根据床位占用变化记录夜间离床/回床过程。
 function updateNightRecords(payload) {
   if (!controlState.nightWakeMonitor) {
     lastBedOccupied = payload.bedOccupied;
@@ -194,6 +234,42 @@ function updateNightRecords(payload) {
   lastBedOccupied = payload.bedOccupied;
 }
 
+// 服务端补充“长时间无活动”提醒，防止设备未主动上报该状态时漏报。
+function applyNoMotionReminder(payload) {
+  const now = Date.now();
+  if (!controlState.noMotionWarning || !thresholdState.enablePir) {
+    payload.noMotion = false;
+    return payload;
+  }
+
+  if (payload.pirMotion) {
+    lastMotionSeenAtMs = now;
+    motionTrackingStartedAtMs = now;
+    payload.noMotion = false;
+    return payload;
+  }
+
+  const noMotionMs = Math.max(1, Number(thresholdState.noMotionMinutes || 30)) * 60 * 1000;
+  if (!motionTrackingStartedAtMs) {
+    const uptimeMs = Math.max(0, Number(payload.uptimeMs || 0));
+    motionTrackingStartedAtMs = now - Math.min(uptimeMs, noMotionMs);
+  }
+
+  const referenceMs = lastMotionSeenAtMs || motionTrackingStartedAtMs;
+  const noMotion = Boolean(payload.noMotion || (now - referenceMs >= noMotionMs));
+  payload.noMotion = noMotion;
+
+  if (noMotion) {
+    payload.alarmAny = true;
+    payload.pushRequired = true;
+    payload.dangerLevel = payload.dangerLevel === 'normal' ? 'warning' : payload.dangerLevel;
+    payload.alarmText = 'NO MOTION';
+  }
+
+  return payload;
+}
+
+// 把秒数转为中文短时长，供事件详情和起夜记录展示。
 function formatDuration(seconds) {
   const mins = Math.floor(seconds / 60);
   const secs = seconds % 60;
@@ -201,8 +277,10 @@ function formatDuration(seconds) {
   return `${secs}秒`;
 }
 
+// 接收一帧遥测后更新最新值、历史、事件、起夜记录和前端推送。
 function rememberTelemetry(payload) {
   const previousAlarm = latestTelemetry?.alarmText;
+  payload = applyNoMotionReminder(payload);
   latestTelemetry = {
     ...payload,
     serverReceivedAt: new Date().toISOString()
@@ -212,11 +290,11 @@ function rememberTelemetry(payload) {
   while (history.length > maxHistory) history.shift();
   updateNightRecords(payload);
 
-  if (payload.sos || payload.fallDetected || payload.alarmAny || payload.nightActivity || previousAlarm !== payload.alarmText) {
+  if (payload.sos || payload.fallDetected || payload.alarmAny || payload.noMotion || payload.nightActivity || previousAlarm !== payload.alarmText) {
     addEvent(
-      payload.sos || payload.fallDetected || payload.dangerLevel === 'co_critical' ? 'critical' : payload.alarmAny ? 'alarm' : payload.nightActivity ? 'activity' : 'status',
+      payload.sos || payload.fallDetected || payload.dangerLevel === 'co_critical' ? 'critical' : payload.alarmAny || payload.noMotion ? 'alarm' : payload.nightActivity ? 'activity' : 'status',
       payload.fallDetected ? 'FALL DETECTED' : payload.sos ? 'SOS HELP' : payload.alarmText,
-      payload.alarmText === 'EARTHQUAKE' ? '检测到强震动，疑似地震或剧烈撞击，请立即查看现场' : payload.fallDetected ? '疑似老人跌倒，请立即查看现场' : payload.sos ? '老人主动求助，请立即处理' : payload.dangerLevel === 'co_critical' ? '一氧化碳超标，已启动最高优先级联动' : payload.alarmAny ? '安全告警已触发' : payload.nightActivity ? '暗环境检测到人体活动，已联动开灯' : '状态变化',
+      payload.alarmText === 'EARTHQUAKE' ? '检测到强震动，疑似地震或剧烈撞击，请立即查看现场' : payload.fallDetected ? '疑似老人跌倒，请立即查看现场' : payload.sos ? '老人主动求助，请立即处理' : payload.dangerLevel === 'co_critical' ? '一氧化碳超标，已启动最高优先级联动' : (payload.alarmAny || payload.noMotion) ? '长时间无活动，已进入看护提醒' : payload.nightActivity ? '暗环境检测到人体活动，已联动开灯' : '状态变化',
       payload.timestamp
     );
   }
@@ -227,6 +305,7 @@ function rememberTelemetry(payload) {
   broadcast('connection', connectionStatePayload());
 }
 
+// 统一输出 JSON 响应，确保中文和 Content-Length 正确。
 function sendJson(res, statusCode, body) {
   const output = JSON.stringify(body);
   res.writeHead(statusCode, {
@@ -236,6 +315,7 @@ function sendJson(res, statusCode, body) {
   res.end(output);
 }
 
+// 向所有浏览器 SSE 连接推送同一类事件。
 function broadcast(type, payload) {
   const frame = `event: ${type}\ndata: ${JSON.stringify(payload)}\n\n`;
   for (const res of sseClients) {
@@ -243,6 +323,7 @@ function broadcast(type, payload) {
   }
 }
 
+// 建立 SSE 长连接，并把当前状态快照立即发给新连接的浏览器。
 function handleSse(req, res) {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream; charset=utf-8',
@@ -258,10 +339,12 @@ function handleSse(req, res) {
   res.write(`event: controls\ndata: ${JSON.stringify(controlState)}\n\n`);
   res.write(`event: thresholds\ndata: ${JSON.stringify(thresholdState)}\n\n`);
   res.write(`event: mock\ndata: ${JSON.stringify({ enabled: mockEnabled })}\n\n`);
+  res.write(`event: demoData\ndata: ${JSON.stringify(demoDataState)}\n\n`);
   res.write(`event: connection\ndata: ${JSON.stringify(connectionStatePayload())}\n\n`);
   req.on('close', () => sseClients.delete(res));
 }
 
+// 更新联动开关并持久化，随后广播状态和事件。
 function updateControls(input) {
   for (const key of Object.keys(controlState)) {
     if (Object.prototype.hasOwnProperty.call(input, key)) {
@@ -281,6 +364,7 @@ function updateControls(input) {
   return controlState;
 }
 
+// 兼容设备和网页提交的混合控制 payload，拆分开关和阈值字段。
 function splitControlPayload(input = {}) {
   const controls = {};
   const thresholds = {};
@@ -300,23 +384,28 @@ function splitControlPayload(input = {}) {
   return { controls, thresholds };
 }
 
+// 判断拆分后的 payload 是否真的包含有效字段。
 function hasPayloadKeys(input) {
   return Object.keys(input).length > 0;
 }
 
+// 生成一帧演示数据，复用共享模型保证和真实遥测字段一致。
 function buildMockPayload() {
   return MonitorModel.createDemoTelemetry({
     deviceName: 'demo-esp32',
-    productKey: 'demo',
+    productKey: 'static-demo',
+    demoData: demoDataState,
     thresholds: thresholdState,
     controls: controlState
   });
 }
 
+// 演示模式定时器 tick：生成并注入一帧模拟遥测。
 function tickMock() {
   rememberTelemetry(buildMockPayload());
 }
 
+// 启停服务端演示模式，并向前端广播当前演示状态。
 function setMockEnabled(enabled, options = {}) {
   mockEnabled = Boolean(enabled);
   if (mockEnabled && !mockTimer) {
@@ -330,11 +419,12 @@ function setMockEnabled(enabled, options = {}) {
   saveMockState();
   broadcast('mock', { enabled: mockEnabled });
   if (options.addEvent !== false) {
-    addEvent('status', mockEnabled ? 'DEMO ENABLED' : 'DEMO DISABLED', mockEnabled ? '网页端模拟演示数据已开启' : '网页端模拟演示数据已关闭');
+    addEvent('status', mockEnabled ? 'DEMO ENABLED' : 'DEMO DISABLED', mockEnabled ? '网页端静态演示数据已开启' : '网页端静态演示数据已关闭');
   }
   return { enabled: mockEnabled };
 }
 
+// 读取并限制 POST 请求体大小，避免异常大 payload 拖垮服务。
 function readRequestBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
@@ -350,6 +440,7 @@ function readRequestBody(req) {
   });
 }
 
+// 根据静态文件扩展名返回 MIME 类型。
 function contentType(filePath) {
   const ext = path.extname(filePath).toLowerCase();
   if (ext === '.html') return 'text/html; charset=utf-8';
@@ -360,6 +451,7 @@ function contentType(filePath) {
   return 'application/octet-stream';
 }
 
+// 安全地从 public 目录提供前端静态文件，防止路径穿越。
 function serveStatic(urlPath, res) {
   const publicDir = path.join(__dirname, 'public');
   const decodedPath = decodeURIComponent(urlPath);
@@ -376,6 +468,7 @@ function serveStatic(urlPath, res) {
   fs.createReadStream(filePath).pipe(res);
 }
 
+// 健康检查聚合：用于部署验证和外部探活。
 function healthPayload() {
   return {
     ok: true,
@@ -389,6 +482,7 @@ function healthPayload() {
   };
 }
 
+// 处理所有 GET API；返回 true 表示请求已被消费。
 function handleGetApi(pathname, req, res) {
   if (pathname === '/api/health') {
     sendJson(res, 200, healthPayload());
@@ -435,6 +529,11 @@ function handleGetApi(pathname, req, res) {
     return true;
   }
 
+  if (pathname === '/api/demo-data') {
+    sendJson(res, 200, demoDataState);
+    return true;
+  }
+
   if (pathname === '/api/stream') {
     handleSse(req, res);
     return true;
@@ -443,11 +542,13 @@ function handleGetApi(pathname, req, res) {
   return false;
 }
 
+// 解析 JSON 请求体，空 body 视作空对象。
 async function parseJsonBody(req) {
   const body = await readRequestBody(req);
   return JSON.parse(body || '{}');
 }
 
+// 处理所有 POST API：控制保存、阈值保存、演示模式和设备遥测上报。
 async function handlePostApi(pathname, req, res) {
   if (pathname === '/api/control') {
     if (!assertDeviceOnline(res)) return true;
@@ -471,6 +572,11 @@ async function handlePostApi(pathname, req, res) {
     return true;
   }
 
+  if (pathname === '/api/demo-data') {
+    sendJson(res, 200, saveDemoData(await parseJsonBody(req)));
+    return true;
+  }
+
   if (pathname === '/api/telemetry') {
     const token = req.headers['x-device-token'] || '';
     if (expectedToken && token !== expectedToken) {
@@ -491,6 +597,7 @@ async function handlePostApi(pathname, req, res) {
   return false;
 }
 
+// HTTP 入口：先匹配 API，再回退到静态文件服务。
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, `http://${req.headers.host || 'localhost'}`);
 

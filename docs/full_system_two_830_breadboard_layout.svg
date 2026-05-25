@@ -1,3 +1,4 @@
+<!-- 面包板接线布局 SVG：展示两块 830 面包板上的模块位置和连线关系。 -->
 <svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1000" viewBox="0 0 1600 1000" role="img" aria-labelledby="title desc">
   <title id="title">ESP32 老人监测系统两块 830 面包板布局图</title>
   <desc id="desc">两块 830 面包板上放置 ESP32-S3、OLED、BH1750、DHT22、PIR、FSR、SW420、SOS、MQ135、MQ7、蜂鸣器、继电器、LED 和舵机的推荐布局。</desc>

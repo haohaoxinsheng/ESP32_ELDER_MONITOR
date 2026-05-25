@@ -1,3 +1,4 @@
+// 全局时序配置：集中定义传感器采样、显示刷新、串口输出、跌倒判定和告警节奏。
 #pragma once
 
 #include <Arduino.h>
