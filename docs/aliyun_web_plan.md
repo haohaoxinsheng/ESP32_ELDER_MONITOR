@@ -24,11 +24,10 @@ ESP32 传感器终端
 1. 进入 `web` 目录。
 2. 复制 `.env.example` 为 `.env`。
 3. 设置 `DEVICE_TOKEN`。
-4. 复制 `include/cloud/cloud_secrets.example.h` 为 `include/cloud/cloud_secrets.h`，填写 WiFi、设备三元组和 `WEB_MIRROR_TOKEN`。
-5. ESP32 的 `WEB_MIRROR_TOKEN` 必须与 `DEVICE_TOKEN` 一致。
-6. 把 `ENABLE_WEB_MIRROR` 改为 `true`。
-7. 当前阿里云公网入口为 `http://59.110.166.166`，ESP32 使用 `http://59.110.166.166/api/telemetry` 上报数据，使用 `http://59.110.166.166/api/control` 拉取控制状态。
-8. 推荐云端 Node 服务内部监听 `3001`，由 Nginx 监听 `80` 并反向代理到 `127.0.0.1:3001`，这样浏览器和 ESP32 都不用携带端口号。
+4. ESP32 的 `WEB_MIRROR_TOKEN` 必须与 `DEVICE_TOKEN` 一致。
+5. 把 `ENABLE_WEB_MIRROR` 改为 `true`。
+6. 当前阿里云公网入口为 `http://59.110.166.166`，ESP32 使用 `http://59.110.166.166/api/telemetry` 上报数据，使用 `http://59.110.166.166/api/control` 拉取控制状态。
+7. 推荐云端 Node 服务内部监听 `3001`，由 Nginx 监听 `80` 并反向代理到 `127.0.0.1:3001`，这样浏览器和 ESP32 都不用携带端口号。
 
 ## 答辩展示流程
 

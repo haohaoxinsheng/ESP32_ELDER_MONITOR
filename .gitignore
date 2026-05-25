@@ -9,4 +9,3 @@ web/data/
 .deploy/
 __pycache__/
 *.pyc
-include/cloud/cloud_secrets.h

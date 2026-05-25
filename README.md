@@ -100,11 +100,11 @@ MQ135、MQ7、FSR402、震动量在不同接线和模块电位器状态下原始
 - `ENABLE_WIFI`：改为 `true` 后启用 WiFi。
 - `ENABLE_ALIYUN_MQTT`：改为 `true` 后启用阿里云 MQTT 属性上报。
 - `ENABLE_WEB_MIRROR`：改为 `true` 后同时把数据 POST 给网页后端。
-- `WIFI_SSID` / `WIFI_PASSWORD`：复制 `include/cloud/cloud_secrets.example.h` 为 `include/cloud/cloud_secrets.h` 后填写路由器 WiFi。
+- `WIFI_SSID` / `WIFI_PASSWORD`：填写路由器 WiFi。
 - `ALIYUN_REGION_ID`：填写阿里云物联网平台地域，例如 `cn-shanghai`。
-- `ALIYUN_PRODUCT_KEY` / `ALIYUN_DEVICE_NAME` / `ALIYUN_DEVICE_SECRET`：在 `include/cloud/cloud_secrets.h` 中填写设备三元组。
+- `ALIYUN_PRODUCT_KEY` / `ALIYUN_DEVICE_NAME` / `ALIYUN_DEVICE_SECRET`：填写设备三元组。
 - `WEB_MIRROR_URL`：填写网页后端地址，当前阿里云地址为 `http://59.110.166.166/api/telemetry`。
-- `WEB_MIRROR_TOKEN`：在 `include/cloud/cloud_secrets.h` 中填写，并和网页后端 `.env` 里的 `DEVICE_TOKEN` 保持一致。
+- `WEB_MIRROR_TOKEN`：和网页后端 `.env` 里的 `DEVICE_TOKEN` 保持一致。
 
 阿里云物模型建议添加以下属性标识符：
 
