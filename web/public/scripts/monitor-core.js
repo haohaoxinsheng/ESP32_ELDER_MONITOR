@@ -19,6 +19,8 @@
     demoData: monitorModel.createDefaultDemoTelemetry(),
     demoDataDirty: false,
     demoDataSaving: false,
+    demoDataSaveTimer: null,
+    demoDataRevision: 0,
     thresholdFormDirty: false,
     thresholdFormSaving: false,
     thresholdDraft: {},

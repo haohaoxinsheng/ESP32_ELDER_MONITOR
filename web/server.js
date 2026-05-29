@@ -405,8 +405,28 @@ function tickMock() {
   rememberTelemetry(buildMockPayload());
 }
 
+// 关闭演示后保留最后一帧真实上下文，但清空仅来自演示的压力读数。
+function clearMockPressureReading() {
+  if (!latestTelemetry) return;
+  latestTelemetry = MonitorModel.normalizeAndDeriveTelemetry(
+    {
+      ...latestTelemetry,
+      fsrRaw: null,
+      bedOccupied: false,
+      nightWakeActive: false
+    },
+    thresholdState,
+    controlState,
+    { timestamp: latestTelemetry.timestamp || new Date().toISOString() }
+  );
+  latestTelemetry.serverReceivedAt = null;
+  broadcast('telemetry', latestTelemetry);
+  broadcast('connection', connectionStatePayload());
+}
+
 // 启停服务端演示模式，并向前端广播当前演示状态。
 function setMockEnabled(enabled, options = {}) {
+  const wasMockEnabled = mockEnabled;
   mockEnabled = Boolean(enabled);
   if (mockEnabled && !mockTimer) {
     tickMock();
@@ -415,6 +435,9 @@ function setMockEnabled(enabled, options = {}) {
   if (!mockEnabled && mockTimer) {
     clearInterval(mockTimer);
     mockTimer = null;
+  }
+  if (wasMockEnabled && !mockEnabled) {
+    clearMockPressureReading();
   }
   saveMockState();
   broadcast('mock', { enabled: mockEnabled });
@@ -581,6 +604,12 @@ async function handlePostApi(pathname, req, res) {
     const token = req.headers['x-device-token'] || '';
     if (expectedToken && token !== expectedToken) {
       sendJson(res, 401, { ok: false, error: 'invalid token' });
+      return true;
+    }
+
+    if (mockEnabled) {
+      await parseJsonBody(req);
+      sendJson(res, 200, { ok: true, ignored: true, reason: 'mock enabled' });
       return true;
     }
 

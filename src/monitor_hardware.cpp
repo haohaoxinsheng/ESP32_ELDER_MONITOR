@@ -35,6 +35,13 @@ void setBuzzer(bool on) {
   }
 }
 
+// 统一设置风扇继电器，兼容高电平触发和低电平触发模块。
+void setFanRelay(bool on) {
+  const uint8_t activeLevel = ActuatorConfig::FAN_RELAY_ACTIVE_HIGH ? HIGH : LOW;
+  const uint8_t inactiveLevel = ActuatorConfig::FAN_RELAY_ACTIVE_HIGH ? LOW : HIGH;
+  digitalWrite(ActuatorConfig::FAN_RELAY_PIN, on ? activeLevel : inactiveLevel);
+}
+
 // 统一设置外接 LED 灯，极性由 ActuatorConfig::LED_LIGHT_ACTIVE_HIGH 决定。
 void setLedLight(bool on) {
   const uint8_t activeLevel = ActuatorConfig::LED_LIGHT_ACTIVE_HIGH ? HIGH : LOW;
@@ -42,9 +49,13 @@ void setLedLight(bool on) {
   digitalWrite(ActuatorConfig::LED_LIGHT_PIN, on ? activeLevel : inactiveLevel);
 }
 
-// SOS 按键消抖读取：默认上拉输入，稳定低电平表示按下。
+bool sosRawLevel() {
+  return digitalRead(SosButtonConfig::PIN) == HIGH;
+}
+
+// SOS 按键消抖读取：按下电平由 SosButtonConfig::ACTIVE_LOW 配置。
 bool buttonPressed() {
-  const bool reading = digitalRead(SosButtonConfig::PIN);
+  const bool reading = sosRawLevel();
   const uint32_t now = millis();
 
   if (reading != lastSosReading) {
@@ -56,21 +67,22 @@ bool buttonPressed() {
     stableSosState = reading;
   }
 
-  return stableSosState == LOW;
+  return SosButtonConfig::ACTIVE_LOW ? stableSosState == LOW : stableSosState == HIGH;
 }
 
 // 配置所有 GPIO、ADC 分辨率和执行器默认状态。
 void setupPins() {
   pinMode(PirConfig::OUT_PIN, INPUT);
   pinMode(Sw420Config::DOUT_PIN, INPUT);
-  pinMode(SosButtonConfig::PIN, INPUT_PULLUP);
+  pinMode(SosButtonConfig::PIN, SosButtonConfig::USE_INTERNAL_PULLUP ? INPUT_PULLUP : INPUT);
+  setFanRelay(false);
   pinMode(ActuatorConfig::BUZZER_PIN, OUTPUT);
   pinMode(ActuatorConfig::FAN_RELAY_PIN, OUTPUT);
   pinMode(ActuatorConfig::LED_LIGHT_PIN, OUTPUT);
   ServoDrive::setupPin();
 
   setBuzzer(false);
-  digitalWrite(ActuatorConfig::FAN_RELAY_PIN, LOW);
+  setFanRelay(false);
   setLedLight(false);
 
   analogReadResolution(12);

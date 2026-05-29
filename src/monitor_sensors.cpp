@@ -15,6 +15,51 @@
 #include "monitor/monitor_state.h"
 
 namespace Monitor {
+namespace {
+uint32_t pressureExceededSinceMs = 0;
+uint32_t sosHoldUntilMs = 0;
+
+bool updatePressureAlarm(const DeviceControlState& controls, uint32_t now) {
+  if (!controls.enableFsr) {
+    pressureExceededSinceMs = 0;
+    return false;
+  }
+
+  if (data.fsrRaw >= controls.fsrPressure) {
+    if (pressureExceededSinceMs == 0) {
+      pressureExceededSinceMs = now;
+    }
+    return now - pressureExceededSinceMs >= Fsr402Config::PRESS_ALARM_HOLD_MS;
+  }
+
+  if (data.fsrRaw + Fsr402Config::PRESS_CLEAR_MARGIN_RAW < controls.fsrPressure) {
+    pressureExceededSinceMs = 0;
+    return false;
+  }
+
+  return alarmState.pressure;
+}
+}  // namespace
+
+// 高频读取 SOS，并将短按保持数秒，避免网页上报周期错过瞬时按键。
+void updateSosState() {
+  const DeviceControlState& controls = AliyunClient::controlState();
+  const uint32_t now = millis();
+  const bool pressed = controls.enableSos && buttonPressed();
+
+  if (!controls.enableSos) {
+    sosHoldUntilMs = 0;
+    data.sos = false;
+    return;
+  }
+
+  if (pressed) {
+    sosHoldUntilMs = now + Timing::SOS_ALARM_HOLD_MS;
+  }
+
+  data.sos = pressed || static_cast<int32_t>(sosHoldUntilMs - now) > 0;
+}
+
 // 读取所有启用的传感器；网页端关闭某个传感器时保留安全默认值。
 void readSensors() {
   const DeviceControlState& controls = AliyunClient::controlState();
@@ -31,7 +76,7 @@ void readSensors() {
   data.pirMotion = controls.enablePir && digitalRead(PirConfig::OUT_PIN) == HIGH;
   data.vibration = controls.enableSw420 && digitalRead(Sw420Config::DOUT_PIN) == HIGH;
   data.vibrationRaw = data.vibration ? 4095 : 0;
-  data.sos = controls.enableSos && buttonPressed();
+  updateSosState();
 
   if (data.pirMotion) {
     lastMotionMs = millis();
@@ -80,7 +125,7 @@ void updateComfortAlarms(const DeviceControlState& controls) {
 
 // 活动类告警：处理压力、振动、长时间无活动、跌倒和 SOS。
 void updateActivityAlarms(const DeviceControlState& controls, uint32_t now) {
-  alarmState.pressure = controls.enableFsr && data.fsrRaw >= controls.fsrPressure;
+  alarmState.pressure = updatePressureAlarm(controls, now);
   alarmState.vibration = controls.enableSw420 && data.vibration;
   const uint32_t noMotionWarningMs = static_cast<uint32_t>(controls.noMotionMinutes) * 60UL * 1000UL;
   alarmState.noMotion = controls.noMotionWarning && (now - lastMotionMs) >= noMotionWarningMs;

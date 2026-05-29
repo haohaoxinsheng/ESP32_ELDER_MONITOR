@@ -3,6 +3,7 @@
 
 #include <cstring>
 
+#include "cloud/aliyun_client.h"
 #include "config.h"
 #include "devices/dht22_config.h"
 #include "devices/fsr402_config.h"
@@ -103,7 +104,7 @@ uint8_t collectDisplayAlerts(DisplayAlert* alerts) {
 
   if (alarmState.pressure) {
     addDisplayAlert(alerts, count, "FSR PRESS", "WARNING", "Value", data.fsrRaw,
-                    "Limit", Fsr402Config::PRESS_WARN_RAW, "", true);
+                    "Limit", AliyunClient::controlState().fsrPressure, "", true);
   }
 
   if (alarmState.vibration) {

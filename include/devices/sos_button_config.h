@@ -6,4 +6,6 @@
 namespace SosButtonConfig {
 constexpr uint8_t PIN = 12;
 constexpr uint32_t DEBOUNCE_MS = 60;
+constexpr bool ACTIVE_LOW = true;
+constexpr bool USE_INTERNAL_PULLUP = true;
 }  // namespace SosButtonConfig

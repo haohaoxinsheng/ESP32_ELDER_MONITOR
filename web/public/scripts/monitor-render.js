@@ -371,14 +371,14 @@
       if (!state.demoDataDirty && !state.demoDataSaving && document.activeElement !== input) {
         input.value = state.demoData[key] ?? '';
       }
-      input.disabled = state.demoDataSaving;
+      input.disabled = false;
     });
     document.querySelectorAll('[data-demo-bool]').forEach((input) => {
       const key = input.dataset.demoBool;
       if (!state.demoDataDirty && !state.demoDataSaving && document.activeElement !== input) {
         input.checked = Boolean(state.demoData[key]);
       }
-      input.disabled = state.demoDataSaving;
+      input.disabled = false;
     });
     document.querySelectorAll('#demoDataForm button').forEach((button) => {
       button.disabled = state.demoDataSaving;

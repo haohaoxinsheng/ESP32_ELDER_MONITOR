@@ -228,8 +228,24 @@
                   <input type="checkbox" data-demo-bool="bedOccupied" />
                 </label>
                 <label class="switch-row">
-                  <span><strong>演示风扇开启</strong><small>只影响静态演示数据，真实设备仍按异常联动</small></span>
+                  <span><strong>演示 LED 开启</strong><small>演示模式下手动控制灯光显示</small></span>
+                  <input type="checkbox" data-demo-bool="ledOn" />
+                </label>
+                <label class="switch-row">
+                  <span><strong>演示风扇开启</strong><small>演示模式下手动控制风扇继电器</small></span>
                   <input type="checkbox" data-demo-bool="fanOn" />
+                </label>
+                <label class="switch-row">
+                  <span><strong>演示蜂鸣器开启</strong><small>演示模式下手动控制蜂鸣器状态</small></span>
+                  <input type="checkbox" data-demo-bool="buzzerOn" />
+                </label>
+                <label class="switch-row">
+                  <span><strong>演示舵机动作</strong><small>演示模式下手动控制 SOS 舵机</small></span>
+                  <input type="checkbox" data-demo-bool="servoActive" />
+                </label>
+                <label class="switch-row">
+                  <span><strong>演示窗帘关闭</strong><small>演示模式下手动控制窗帘状态</small></span>
+                  <input type="checkbox" data-demo-bool="curtainClosed" />
                 </label>
               </div>
               <div class="settings-actions">

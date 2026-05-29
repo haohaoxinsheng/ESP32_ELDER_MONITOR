@@ -7,4 +7,6 @@ namespace Fsr402Config {
 constexpr uint8_t AOUT_PIN = 6;
 constexpr uint16_t BED_OCCUPIED_RAW = 1200;
 constexpr uint16_t PRESS_WARN_RAW = 2300;
+constexpr uint16_t PRESS_CLEAR_MARGIN_RAW = 180;
+constexpr uint32_t PRESS_ALARM_HOLD_MS = 1500;
 }  // namespace Fsr402Config

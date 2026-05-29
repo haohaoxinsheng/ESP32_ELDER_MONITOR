@@ -46,7 +46,7 @@ struct DeviceControlState {
   bool enablePir = true;
   bool enableSw420 = true;
   bool enableSos = true;
-  bool darkLight = true;
+  bool darkLight = false;
   bool nightLight = true;
   bool nightWakeMonitor = true;
   bool nightWakeLight = true;

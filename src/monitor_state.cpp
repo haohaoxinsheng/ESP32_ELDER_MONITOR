@@ -46,10 +46,12 @@ bool isBedOccupied(const DeviceControlState& controls) {
   return controls.enableFsr && data.fsrRaw >= controls.bedPresenceRaw;
 }
 
-// 通风需求判断：气体危险、烟雾/CO 预警或温湿度异常都会触发风扇。
+// 通风需求判断：空气质量、烟雾、CO 预警或温湿度异常都会触发风扇。
 bool isVentilationNeeded() {
-  return alarmState.airDanger || alarmState.smokeWarning ||
-         alarmState.coWarning || alarmState.tempHumidity;
+  return alarmState.airWarning || alarmState.airDanger ||
+         alarmState.smokeWarning || alarmState.smokeDanger ||
+         alarmState.coWarning || alarmState.coDanger ||
+         alarmState.tempHumidity;
 }
 
 // 选择当前最重要的告警文案，顺序决定 OLED、串口和 Web 的主状态。

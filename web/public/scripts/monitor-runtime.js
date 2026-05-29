@@ -147,7 +147,28 @@
     renderDemoDataForm();
   }
 
+  function previewDemoData() {
+    if (!state.mock.enabled && !state.demoTimer && location.protocol !== 'file:') return;
+    const payload = monitorModel.createDemoTelemetry({
+      deviceName: 'demo-esp32',
+      productKey: location.protocol === 'file:' ? 'local-demo' : 'static-demo',
+      demoData: state.demoData,
+      thresholds: state.thresholds,
+      controls: state.controls
+    });
+    handleTelemetry(payload);
+    drawTrend();
+  }
+
+  function scheduleDemoDataSave() {
+    clearTimeout(state.demoDataSaveTimer);
+    state.demoDataSaveTimer = setTimeout(() => {
+      saveDemoData(state.demoData);
+    }, 350);
+  }
+
   async function saveDemoData(nextDemoData) {
+    const saveRevision = state.demoDataRevision;
     state.demoDataSaving = true;
     state.demoData = monitorModel.normalizeDemoTelemetry(nextDemoData || state.demoData);
     setDemoDataStatus('保存中...');
@@ -170,10 +191,16 @@
         body: JSON.stringify(state.demoData)
       });
       const saved = await readJsonResponse(response, '保存演示数据');
-      state.demoData = monitorModel.normalizeDemoTelemetry(saved);
-      state.demoDataDirty = false;
-      setDemoDataStatus('已保存');
-      renderDemoDataForm();
+      if (saveRevision === state.demoDataRevision) {
+        state.demoData = monitorModel.normalizeDemoTelemetry(saved);
+        state.demoDataDirty = false;
+        setDemoDataStatus('已保存');
+        renderDemoDataForm();
+      } else {
+        setDemoDataStatus('已更新');
+        renderDemoDataForm();
+        if (state.demoDataDirty) scheduleDemoDataSave();
+      }
     } catch (error) {
       setDemoDataStatus(error.message || '保存失败');
     } finally {
@@ -185,6 +212,9 @@
   function resetDemoData() {
     state.demoData = monitorModel.createDefaultDemoTelemetry();
     state.demoDataDirty = false;
+    state.demoDataRevision += 1;
+    clearTimeout(state.demoDataSaveTimer);
+    previewDemoData();
     renderDemoDataForm();
     return saveDemoData(state.demoData);
   }
@@ -471,13 +501,21 @@
       $('demoDataForm').addEventListener('input', (event) => {
         if (event.target.matches('[data-demo], [data-demo-bool]')) {
           state.demoDataDirty = true;
+          state.demoDataRevision += 1;
+          state.demoData = readDemoDataForm();
           setDemoDataStatus('未保存');
+          previewDemoData();
+          scheduleDemoDataSave();
         }
       });
       $('demoDataForm').addEventListener('change', (event) => {
         if (event.target.matches('[data-demo], [data-demo-bool]')) {
           state.demoDataDirty = true;
+          state.demoDataRevision += 1;
+          state.demoData = readDemoDataForm();
           setDemoDataStatus('未保存');
+          previewDemoData();
+          scheduleDemoDataSave();
         }
       });
       $('demoDataForm').addEventListener('submit', async (event) => {

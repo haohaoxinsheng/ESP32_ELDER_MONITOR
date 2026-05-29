@@ -60,15 +60,15 @@
             <div class="automation-head">
               <span class="automation-icon">☾</span>
               <div>
-                <h2>暗环境联动</h2>
-                <span>光照低于阈值时直接执行</span>
+                <h2>暗环境夜灯模式</h2>
+                <span>光照低于阈值时提供基础照明，默认关闭</span>
               </div>
               <strong id="darkLightState">关闭</strong>
             </div>
             <div class="switch-list">
               <label class="switch-row">
-                <span><strong>暗环境自动开灯</strong><small>只要光照低于阈值就打开 LED 灯</small></span>
-                <input type="checkbox" data-control="darkLight" checked />
+                <span><strong>夜灯模式</strong><small>只在需要基础照明时开启，避免覆盖人体和起夜联动</small></span>
+                <input type="checkbox" data-control="darkLight" />
               </label>
               <label class="switch-row">
                 <span><strong>窗帘自动开关</strong><small>暗环境时自动关闭窗帘，白天保持待机</small></span>
@@ -76,7 +76,7 @@
               </label>
             </div>
             <div class="automation-state">
-              <span>暗光灯</span><strong id="darkLightDetailState">关闭</strong>
+              <span>夜灯</span><strong id="darkLightDetailState">关闭</strong>
               <span>窗帘</span><strong id="curtainState">待机</strong>
             </div>
           </article>

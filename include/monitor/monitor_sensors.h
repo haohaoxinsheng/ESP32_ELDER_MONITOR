@@ -5,6 +5,7 @@
 
 namespace Monitor {
 void readSensors();
+void updateSosState();
 void updateActivityState();
 void updateAlarmState();
 }  // namespace Monitor

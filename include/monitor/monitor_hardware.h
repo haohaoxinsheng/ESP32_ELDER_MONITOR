@@ -5,7 +5,9 @@
 
 namespace Monitor {
 void setBuzzer(bool on);
+void setFanRelay(bool on);
 void setLedLight(bool on);
+bool sosRawLevel();
 bool buttonPressed();
 void setupPins();
 void setupDevices();

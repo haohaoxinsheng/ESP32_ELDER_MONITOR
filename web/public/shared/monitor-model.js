@@ -7,7 +7,7 @@
   root.MonitorModel = factory();
 }(typeof globalThis !== 'undefined' ? globalThis : this, function () {
   const DEFAULT_CONTROLS = Object.freeze({
-    darkLight: true,
+    darkLight: false,
     nightLight: true,
     nightWakeMonitor: true,
     nightWakeLight: true,
@@ -70,6 +70,8 @@
     pushRequired: false,
     fanOn: false,
     ledOn: false,
+    buzzerOn: false,
+    curtainClosed: false,
     darkLightOn: false,
     nightLightOn: false,
     nightWakeLightOn: false,
@@ -161,13 +163,14 @@
       mq2Raw: Number(source.mq2Raw ?? 0),
       mq135Raw: Number(source.mq135Raw ?? 0),
       mq7Raw: Number(source.mq7Raw ?? 0),
-      fsrRaw: Number(source.fsrRaw ?? 0),
+      fsrRaw: optionalNumber(source.fsrRaw),
       vibrationRaw: Number(source.vibrationRaw ?? (source.vibration ? 4095 : 0)),
       pirMotion: Boolean(source.pirMotion),
       vibration: Boolean(source.vibration),
       sos: Boolean(source.sos),
       noMotion: Boolean(source.noMotion ?? (source.alarmText === 'NO MOTION')),
       fallDetected: Boolean(source.fallDetected ?? source.fall ?? false),
+      demoMode: Boolean(source.demoMode),
       dark: Boolean(source.dark),
       bedOccupied: Boolean(source.bedOccupied ?? false),
       nightWakeActive: Boolean(source.nightWakeActive ?? false),
@@ -176,6 +179,8 @@
       pushRequired: Boolean(source.pushRequired),
       fanOn: Boolean(source.fanOn),
       ledOn: Boolean(source.ledOn),
+      buzzerOn: Boolean(source.buzzerOn),
+      curtainClosed: Boolean(source.curtainClosed),
       darkLightOn: Boolean(source.darkLightOn),
       nightLightOn: Boolean(source.nightLightOn),
       nightWakeLightOn: Boolean(source.nightWakeLightOn),
@@ -216,23 +221,35 @@
        (hasNumber(next.humidity) && Number(next.humidity) >= th.humidityHigh));
     const tempLow = th.enableDht22 && hasNumber(next.temperatureC) && Number(next.temperatureC) <= th.tempLow;
     const humidityLow = th.enableDht22 && hasNumber(next.humidity) && Number(next.humidity) <= th.humidityLow;
-    const pressure = th.enableFsr && Number(next.fsrRaw) >= th.fsrPressure;
+    const pressure = th.enableFsr && hasNumber(next.fsrRaw) && Number(next.fsrRaw) >= th.fsrPressure;
     const earthquake = th.enableSw420 && Number(next.vibrationRaw) >= th.earthquakeWarn;
     const warning = airWarning || smokeWarning || coWarning || tempHumid || tempLow || humidityLow || pressure;
 
     next.dark = th.enableBh1750 && Boolean(next.dark || (hasNumber(next.lux) && Number(next.lux) <= th.luxDark));
-    next.bedOccupied = th.enableFsr && Boolean(next.bedOccupied || Number(next.fsrRaw) >= th.bedPresenceRaw);
+    next.bedOccupied = th.enableFsr && Boolean(next.bedOccupied || (hasNumber(next.fsrRaw) && Number(next.fsrRaw) >= th.bedPresenceRaw));
     next.nightWakeActive = Boolean(next.nightWakeActive || (next.dark && !next.bedOccupied && next.pirMotion));
     next.nightActivity = Boolean(next.nightActivity || (next.dark && next.pirMotion) || next.nightWakeActive);
     next.vibration = th.enableSw420 && Boolean(next.vibration || earthquake);
     next.alarmAny = Boolean(next.sos || next.fallDetected || earthquake || coDanger || smokeDanger || airDanger || warning || next.vibration || noMotion);
     next.pushRequired = Boolean(next.pushRequired || next.sos || next.fallDetected || earthquake || coDanger || smokeDanger || airDanger || noMotion);
-    next.fanOn = Boolean(next.fanOn || coDanger || smokeDanger || airDanger || tempHumid);
-    next.darkLightOn = Boolean(next.darkLightOn || (next.dark && ctl.darkLight));
-    next.nightLightOn = Boolean(next.nightLightOn || (next.nightActivity && ctl.nightLight));
-    next.nightWakeLightOn = Boolean(next.nightWakeLightOn || (next.nightWakeActive && ctl.nightWakeLight));
-    next.alarmLightOn = Boolean(next.alarmLightOn || (next.alarmAny && ctl.alarmLight));
-    next.ledOn = Boolean(next.ledOn || next.darkLightOn || next.nightLightOn || next.nightWakeLightOn || next.alarmLightOn);
+    if (next.demoMode) {
+      next.fanOn = Boolean(next.fanOn);
+      next.ledOn = Boolean(next.ledOn);
+      next.buzzerOn = Boolean(next.buzzerOn);
+      next.servoActive = Boolean(next.servoActive);
+      next.curtainClosed = Boolean(next.curtainClosed);
+      next.darkLightOn = false;
+      next.nightLightOn = false;
+      next.nightWakeLightOn = false;
+      next.alarmLightOn = Boolean(next.ledOn);
+    } else {
+      next.fanOn = Boolean(next.fanOn || coWarning || coDanger || smokeWarning || smokeDanger || airWarning || airDanger || tempHumid);
+      next.darkLightOn = Boolean(next.darkLightOn || (next.dark && ctl.darkLight));
+      next.nightLightOn = Boolean(next.nightLightOn || (next.nightActivity && ctl.nightLight));
+      next.nightWakeLightOn = Boolean(next.nightWakeLightOn || (next.nightWakeActive && ctl.nightWakeLight));
+      next.alarmLightOn = Boolean(next.alarmLightOn || (next.alarmAny && ctl.alarmLight));
+      next.ledOn = Boolean(next.ledOn || next.darkLightOn || next.nightLightOn || next.nightWakeLightOn || next.alarmLightOn);
+    }
 
     if (earthquake) {
       next.dangerLevel = 'critical';
@@ -288,6 +305,15 @@
       next.alarmAny = false;
     }
 
+    if (next.demoMode) {
+      next.fanOn = Boolean(payload.fanOn);
+      next.ledOn = Boolean(payload.ledOn);
+      next.buzzerOn = Boolean(payload.buzzerOn);
+      next.servoActive = Boolean(payload.servoActive);
+      next.curtainClosed = Boolean(payload.curtainClosed);
+      next.alarmLightOn = Boolean(payload.ledOn);
+    }
+
     return next;
   }
 
@@ -316,6 +342,22 @@
     }
 
     const alarmActive = Boolean(payload.alarmAny || payload.sos || payload.fallDetected || payload.dangerLevel === 'co_critical');
+    if (payload.demoMode) {
+      return {
+        darkLight: false,
+        nightLight: false,
+        nightWakeLight: false,
+        curtain: Boolean(payload.curtainClosed),
+        curtainOpen: !payload.curtainClosed,
+        alarmLight: Boolean(payload.ledOn),
+        fan: Boolean(payload.fanOn),
+        buzzer: Boolean(payload.buzzerOn),
+        servo: Boolean(payload.servoActive),
+        servoStandby: !payload.servoActive,
+        noMotion: Boolean((payload.noMotion || payload.alarmText === 'NO MOTION') && ctl.noMotionWarning)
+      };
+    }
+
     return {
       darkLight: Boolean(payload.dark) && ctl.darkLight,
       nightLight: Boolean(payload.nightActivity) && ctl.nightLight,
@@ -341,6 +383,7 @@
     };
     return normalizeAndDeriveTelemetry({
       ...source,
+      demoMode: true,
       deviceName: config.deviceName || source.deviceName || 'demo-esp32',
       productKey: config.productKey || source.productKey || 'static-demo',
       uptimeMs: Number.isFinite(Number(source.uptimeMs)) ? Number(source.uptimeMs) : 0

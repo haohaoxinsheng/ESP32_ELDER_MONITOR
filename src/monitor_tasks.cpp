@@ -14,7 +14,7 @@
 namespace Monitor {
 // 快速状态任务：每轮循环处理 SOS、云端控制拉取、活动状态和告警状态。
 void updateFastState() {
-  data.sos = AliyunClient::controlState().enableSos && buttonPressed();
+  updateSosState();
   AliyunClient::loop();
   updateActivityState();
   updateAlarmState();

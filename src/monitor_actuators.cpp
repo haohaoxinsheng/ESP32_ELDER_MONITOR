@@ -12,7 +12,7 @@ namespace Monitor {
 // 风扇联动：在气体或温湿度风险需要通风时吸合继电器。
 void updateFan(const DeviceControlState& controls) {
   fanOn = isVentilationNeeded() && controls.fanVentilation;
-  digitalWrite(ActuatorConfig::FAN_RELAY_PIN, fanOn ? HIGH : LOW);
+  setFanRelay(fanOn);
 }
 
 // 灯光联动：拆分暗环境灯、夜间活动灯、起夜灯和告警灯，危急告警时闪烁。

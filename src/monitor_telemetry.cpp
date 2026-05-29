@@ -2,6 +2,7 @@
 #include "monitor/monitor_telemetry.h"
 
 #include "cloud/aliyun_client.h"
+#include "monitor/monitor_hardware.h"
 #include "monitor/monitor_servo.h"
 #include "monitor/monitor_state.h"
 
@@ -34,6 +35,8 @@ void printSerialLog() {
   Serial.print(data.vibration);
   Serial.print(F(",sos="));
   Serial.print(data.sos);
+  Serial.print(F(",sosRaw="));
+  Serial.print(sosRawLevel());
   Serial.print(F(",noMotion="));
   Serial.print(alarmState.noMotion);
   Serial.print(F(",fall="));
